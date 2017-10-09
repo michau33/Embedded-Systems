@@ -1,0 +1,1234 @@
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 1
+
+
+   1              		.syntax unified
+   2              		.cpu arm7tdmi
+   3              		.fpu softvfp
+   4              		.eabi_attribute 20, 1
+   5              		.eabi_attribute 21, 1
+   6              		.eabi_attribute 23, 3
+   7              		.eabi_attribute 24, 1
+   8              		.eabi_attribute 25, 1
+   9              		.eabi_attribute 26, 1
+  10              		.eabi_attribute 30, 4
+  11              		.eabi_attribute 34, 0
+  12              		.eabi_attribute 18, 4
+  13              		.thumb
+  14              		.syntax unified
+  15              		.file	"main.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.global	__aeabi_lmul
+  20              		.global	__aeabi_uldivmod
+  21              		.section	.text.startup,"ax",%progbits
+  22              		.align	1
+  23              		.global	main
+  24              		.code	16
+  25              		.thumb_func
+  26              		.type	main, %function
+  27              	main:
+  28              	.LFB2:
+  29              		.file 1 "main.c"
+   1:main.c        **** /*************************************************************************************
+   2:main.c        ****  *
+   3:main.c        ****  * @Description:
+   4:main.c        ****  * Program przykładowy - odpowiednik "Hello World" dla systemów wbudowanych
+   5:main.c        ****  * Rekomendujemy wkopiowywanie do niniejszego projektu nowych funkcjonalności
+   6:main.c        ****  *
+   7:main.c        ****  *
+   8:main.c        ****  * UWAGA! Po zmianie rozszerzenia na cpp program automatycznie będzie używać
+   9:main.c        ****  * kompilatora g++. Oczywiście konieczne jest wprowadzenie odpowiednich zmian w
+  10:main.c        ****  * pliku "makefile"
+  11:main.c        ****  *
+  12:main.c        ****  *
+  13:main.c        ****  * Program przykładowy wykorzystuje Timer #0 i Timer #1 do "mrugania" diodami
+  14:main.c        ****  * Dioda P1.16 jest zapalona i gaszona, a czas pomiędzy tymi zdarzeniami
+  15:main.c        ****  * odmierzany jest przez Timer #0.
+  16:main.c        ****  * Program aktywnie oczekuje na upłynięcie odmierzanego czasu (1s)
+  17:main.c        ****  *
+  18:main.c        ****  * Druga z diod P1.17 jest gaszona i zapalana w takt przerwań generowanych
+  19:main.c        ****  * przez timer #1, z okresem 500 ms i wypełnieniem 20%.
+  20:main.c        ****  * Procedura obsługi przerwań zdefiniowana jest w innym pliku (irq/irq_handler.c)
+  21:main.c        ****  * Sama procedura MUSI być oznaczona dla kompilatora jako procedura obsługi 
+  22:main.c        ****  * przerwania odpowiedniego typu. W przykładzie jest to przerwanie wektoryzowane.
+  23:main.c        ****  * Odpowiednia deklaracja znajduje się w pliku (irq/irq_handler.h)
+  24:main.c        ****  * 
+  25:main.c        ****  * Prócz "mrugania" diodami program wypisuje na konsoli powitalny tekst.
+  26:main.c        ****  * 
+  27:main.c        ****  * @Authors: Michał Morawski,
+  28:main.c        ****  *           Daniel Arendt, 
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 2
+
+
+  29:main.c        ****  *           Przemysław Ignaciuk,
+  30:main.c        ****  *           Marcin Kwapisz
+  31:main.c        ****  *
+  32:main.c        ****  * @Change log:
+  33:main.c        ****  *           2016.12.01: Wersja oryginalna.
+  34:main.c        ****  *
+  35:main.c        ****  ******************************************************************************/
+  36:main.c        **** 
+  37:main.c        **** #include "general.h"
+  38:main.c        **** #include <lpc2xxx.h>
+  39:main.c        **** #include <printf_P.h>
+  40:main.c        **** #include <printf_init.h>
+  41:main.c        **** #include <consol.h>
+  42:main.c        **** #include <config.h>
+  43:main.c        **** #include "irq/irq_handler.h"
+  44:main.c        **** #include "timer.h"
+  45:main.c        **** #include "VIC.h"
+  46:main.c        **** 
+  47:main.c        **** #include "Common_Def.h"
+  48:main.c        **** 
+  49:main.c        **** 
+  50:main.c        **** 
+  51:main.c        **** 
+  52:main.c        **** /************************************************************************
+  53:main.c        ****  * @Description: opóźnienie wyrażone w liczbie sekund
+  54:main.c        ****  * @Parameter:
+  55:main.c        ****  *    [in] seconds: liczba sekund opĂłĹşnienia
+  56:main.c        ****  * @Returns: Nic
+  57:main.c        ****  * @Side effects:
+  58:main.c        ****  *    przeprogramowany Timer #0
+  59:main.c        ****  *************************************************************************/
+  60:main.c        **** static void sdelay (tU32 seconds)
+  61:main.c        **** {
+  62:main.c        **** 	T0TCR = TIMER_RESET;                    //Zatrzymaj i zresetuj
+  63:main.c        ****     T0PR  = PERIPHERAL_CLOCK-1;             //jednostka w preskalerze
+  64:main.c        ****     T0MR0 = seconds;
+  65:main.c        ****     T0IR  = TIMER_ALL_INT;                  //Resetowanie flag przerwaĹ„
+  66:main.c        ****     T0MCR = MR0_S;                          //Licz do wartości w MR0 i zatrzymaj się
+  67:main.c        ****     T0TCR = TIMER_RUN;                      //Uruchom timer
+  68:main.c        **** 
+  69:main.c        ****     // sprawdź czy timer działa
+  70:main.c        ****     // nie ma wpisanego ogranicznika liczby pętli, ze względu na charakter procedury
+  71:main.c        ****     // ale to wyjątek od reguły!
+  72:main.c        ****     while (T0TCR & TIMER_RUN)
+  73:main.c        ****     {
+  74:main.c        ****     }
+  75:main.c        **** }
+  76:main.c        **** 
+  77:main.c        **** /************************************************************************
+  78:main.c        ****  * @Description: uruchomienie obsługi przerwań
+  79:main.c        ****  * @Parameter:
+  80:main.c        ****  *    [in] period    : okres generatora przerwań
+  81:main.c        ****  *    [in] duty_cycle: wypełnienie w %
+  82:main.c        ****  * @Returns: Nic
+  83:main.c        ****  * @Side effects:
+  84:main.c        ****  *    przeprogramowany timer #1
+  85:main.c        ****  *************************************************************************/
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 3
+
+
+  86:main.c        **** static void init_irq (tU32 period, tU8 duty_cycle)
+  87:main.c        **** {
+  88:main.c        **** 	//Zainicjuj VIC dla przerwań od Timera #1
+  89:main.c        ****     VICIntSelect &= ~TIMER_1_IRQ;           //Przerwanie od Timera #1 przypisane do IRQ (nie do FIQ
+  90:main.c        ****     VICVectAddr5  = (tU32)IRQ_Test;         //adres procedury przerwania
+  91:main.c        ****     VICVectCntl5  = VIC_ENABLE_SLOT | TIMER_1_IRQ_NO;
+  92:main.c        ****     VICIntEnable  = TIMER_1_IRQ;            // Przypisanie i odblokowanie slotu w VIC od Timera #1
+  93:main.c        ****   
+  94:main.c        ****     T1TCR = TIMER_RESET;                    //Zatrzymaj i zresetuj
+  95:main.c        ****     T1PR  = 0;                              //Preskaler nieużywany
+  96:main.c        ****     T1MR0 = ((tU64)period)*((tU64)PERIPHERAL_CLOCK)/1000;
+  97:main.c        ****     T1MR1 = (tU64)T1MR0 * duty_cycle / 100; //Wypełnienie
+  98:main.c        ****     T1IR  = TIMER_ALL_INT;                  //Resetowanie flag przerwań
+  99:main.c        ****     T1MCR = MR0_I | MR1_I | MR0_R;          //Generuj okresowe przerwania dla MR0 i dodatkowo dla M
+ 100:main.c        ****     T1TCR = TIMER_RUN;                      //Uruchom timer
+ 101:main.c        **** }
+ 102:main.c        **** 
+ 103:main.c        **** int main(void)
+ 104:main.c        **** {
+  30              		.loc 1 104 0
+  31              		.cfi_startproc
+  32              		@ Function supports interworking.
+  33              		@ args = 0, pretend = 0, frame = 0
+  34              		@ frame_needed = 0, uses_anonymous_args = 0
+  35 0000 70B5     		push	{r4, r5, r6, lr}
+  36              	.LCFI0:
+  37              		.cfi_def_cfa_offset 16
+  38              		.cfi_offset 4, -16
+  39              		.cfi_offset 5, -12
+  40              		.cfi_offset 6, -8
+  41              		.cfi_offset 14, -4
+ 105:main.c        **** 	//uruchomienie 'simple printf'
+ 106:main.c        ****     printf_init();
+  42              		.loc 1 106 0
+  43 0002 FFF7FEFF 		bl	printf_init
+  44              	.LVL0:
+ 107:main.c        **** 
+ 108:main.c        ****     //powitanie
+ 109:main.c        ****     simplePrintf("\n\n\n\n");
+  45              		.loc 1 109 0
+  46 0006 3A48     		ldr	r0, .L9
+  47 0008 FFF7FEFF 		bl	simplePrintf
+  48              	.LVL1:
+ 110:main.c        ****     simplePrintf("\n*********************************************************");
+  49              		.loc 1 110 0
+  50 000c 394C     		ldr	r4, .L9+4
+  51 000e 2000     		movs	r0, r4
+  52 0010 FFF7FEFF 		bl	simplePrintf
+  53              	.LVL2:
+ 111:main.c        ****     simplePrintf("\n*");
+  54              		.loc 1 111 0
+  55 0014 384D     		ldr	r5, .L9+8
+  56 0016 2800     		movs	r0, r5
+  57 0018 FFF7FEFF 		bl	simplePrintf
+  58              	.LVL3:
+ 112:main.c        ****     simplePrintf("\n* Systemy Wbudowane");
+  59              		.loc 1 112 0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 4
+
+
+  60 001c 3748     		ldr	r0, .L9+12
+  61 001e FFF7FEFF 		bl	simplePrintf
+  62              	.LVL4:
+ 113:main.c        ****     simplePrintf("\n* Wydzial FTIMS");
+  63              		.loc 1 113 0
+  64 0022 3748     		ldr	r0, .L9+16
+  65 0024 FFF7FEFF 		bl	simplePrintf
+  66              	.LVL5:
+ 114:main.c        ****     simplePrintf("\n* Moj pierwszy program");
+  67              		.loc 1 114 0
+  68 0028 3648     		ldr	r0, .L9+20
+  69 002a FFF7FEFF 		bl	simplePrintf
+  70              	.LVL6:
+ 115:main.c        ****     simplePrintf("\n*");
+  71              		.loc 1 115 0
+  72 002e 2800     		movs	r0, r5
+  73 0030 FFF7FEFF 		bl	simplePrintf
+  74              	.LVL7:
+ 116:main.c        ****     simplePrintf("\n*********************************************************");
+  75              		.loc 1 116 0
+  76 0034 2000     		movs	r0, r4
+  77 0036 FFF7FEFF 		bl	simplePrintf
+  78              	.LVL8:
+ 117:main.c        **** 
+ 118:main.c        ****     /*********************************************************************
+ 119:main.c        ****      * Ta część inicjuje działanie programy
+ 120:main.c        ****      *********************************************************************/
+ 121:main.c        ****     // uruchomienie GPIO na nodze P1.16 i P1.17.
+ 122:main.c        ****     PINSEL2 &= ~(1 << 3);
+  79              		.loc 1 122 0
+  80 003a 0821     		movs	r1, #8
+ 123:main.c        ****     // Kierunek out na nodze P1.16
+ 124:main.c        ****     IODIR1 |= DIODA_PRAWA; //(1 << 16);
+  81              		.loc 1 124 0
+  82 003c 8020     		movs	r0, #128
+ 122:main.c        ****     // Kierunek out na nodze P1.16
+  83              		.loc 1 122 0
+  84 003e 324A     		ldr	r2, .L9+24
+  85 0040 1368     		ldr	r3, [r2]
+  86 0042 8B43     		bics	r3, r1
+  87 0044 1360     		str	r3, [r2]
+  88              		.loc 1 124 0
+  89 0046 314B     		ldr	r3, .L9+28
+  90 0048 1968     		ldr	r1, [r3]
+  91 004a 8002     		lsls	r0, r0, #10
+  92 004c 0143     		orrs	r1, r0
+  93 004e 1960     		str	r1, [r3]
+ 125:main.c        ****     // Kierunek out na nodze P1.17
+ 126:main.c        ****     IODIR1 |= DIODA_PRAWA; //(1 << 17);
+  94              		.loc 1 126 0
+  95 0050 1A68     		ldr	r2, [r3]
+  96 0052 0243     		orrs	r2, r0
+  97 0054 1A60     		str	r2, [r3]
+  98              	.LVL9:
+  99              	.LBB6:
+ 100              	.LBB7:
+  89:main.c        ****     VICVectAddr5  = (tU32)IRQ_Test;         //adres procedury przerwania
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 5
+
+
+ 101              		.loc 1 89 0
+ 102 0056 2022     		movs	r2, #32
+ 103 0058 2D49     		ldr	r1, .L9+32
+ 104 005a 0B68     		ldr	r3, [r1]
+ 105 005c 9343     		bics	r3, r2
+ 106 005e 0B60     		str	r3, [r1]
+  90:main.c        ****     VICVectCntl5  = VIC_ENABLE_SLOT | TIMER_1_IRQ_NO;
+ 107              		.loc 1 90 0
+ 108 0060 2C4B     		ldr	r3, .L9+36
+ 109 0062 2D49     		ldr	r1, .L9+40
+ 110 0064 1960     		str	r1, [r3]
+  91:main.c        ****     VICIntEnable  = TIMER_1_IRQ;            // Przypisanie i odblokowanie slotu w VIC od Timera #1
+ 111              		.loc 1 91 0
+ 112 0066 2521     		movs	r1, #37
+ 113 0068 2C4B     		ldr	r3, .L9+44
+ 114 006a 1960     		str	r1, [r3]
+  92:main.c        ****   
+ 115              		.loc 1 92 0
+ 116 006c 2C4B     		ldr	r3, .L9+48
+ 117 006e 1A60     		str	r2, [r3]
+  94:main.c        ****     T1PR  = 0;                              //Preskaler nieużywany
+ 118              		.loc 1 94 0
+ 119 0070 0223     		movs	r3, #2
+  95:main.c        ****     T1MR0 = ((tU64)period)*((tU64)PERIPHERAL_CLOCK)/1000;
+ 120              		.loc 1 95 0
+ 121 0072 0024     		movs	r4, #0
+  96:main.c        ****     T1MR1 = (tU64)T1MR0 * duty_cycle / 100; //Wypełnienie
+ 122              		.loc 1 96 0
+ 123 0074 B422     		movs	r2, #180
+  94:main.c        ****     T1PR  = 0;                              //Preskaler nieużywany
+ 124              		.loc 1 94 0
+ 125 0076 2B4E     		ldr	r6, .L9+52
+ 126 0078 3360     		str	r3, [r6]
+  95:main.c        ****     T1MR0 = ((tU64)period)*((tU64)PERIPHERAL_CLOCK)/1000;
+ 127              		.loc 1 95 0
+ 128 007a 2B4B     		ldr	r3, .L9+56
+ 129 007c 1C60     		str	r4, [r3]
+  96:main.c        ****     T1MR1 = (tU64)T1MR0 * duty_cycle / 100; //Wypełnienie
+ 130              		.loc 1 96 0
+ 131 007e 2B4B     		ldr	r3, .L9+60
+ 132 0080 D203     		lsls	r2, r2, #15
+ 133 0082 1A60     		str	r2, [r3]
+  97:main.c        ****     T1IR  = TIMER_ALL_INT;                  //Resetowanie flag przerwań
+ 134              		.loc 1 97 0
+ 135 0084 2100     		movs	r1, r4
+ 136 0086 1868     		ldr	r0, [r3]
+ 137 0088 3222     		movs	r2, #50
+ 138 008a 0023     		movs	r3, #0
+ 139 008c FFF7FEFF 		bl	__aeabi_lmul
+ 140              	.LVL10:
+ 141 0090 6422     		movs	r2, #100
+ 142 0092 0023     		movs	r3, #0
+ 143 0094 FFF7FEFF 		bl	__aeabi_uldivmod
+ 144              	.LVL11:
+  98:main.c        ****     T1MCR = MR0_I | MR1_I | MR0_R;          //Generuj okresowe przerwania dla MR0 i dodatkowo dla M
+ 145              		.loc 1 98 0
+ 146 0098 FF22     		movs	r2, #255
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 6
+
+
+ 100:main.c        **** }
+ 147              		.loc 1 100 0
+ 148 009a 0125     		movs	r5, #1
+  97:main.c        ****     T1IR  = TIMER_ALL_INT;                  //Resetowanie flag przerwań
+ 149              		.loc 1 97 0
+ 150 009c 244B     		ldr	r3, .L9+64
+ 151 009e 1860     		str	r0, [r3]
+  98:main.c        ****     T1MCR = MR0_I | MR1_I | MR0_R;          //Generuj okresowe przerwania dla MR0 i dodatkowo dla M
+ 152              		.loc 1 98 0
+ 153 00a0 244B     		ldr	r3, .L9+68
+ 154 00a2 1A60     		str	r2, [r3]
+  99:main.c        ****     T1TCR = TIMER_RUN;                      //Uruchom timer
+ 155              		.loc 1 99 0
+ 156 00a4 244B     		ldr	r3, .L9+72
+ 157 00a6 F43A     		subs	r2, r2, #244
+ 158 00a8 1A60     		str	r2, [r3]
+ 100:main.c        **** }
+ 159              		.loc 1 100 0
+ 160 00aa 3560     		str	r5, [r6]
+ 161 00ac 8026     		movs	r6, #128
+ 162 00ae 7602     		lsls	r6, r6, #9
+ 163              	.L5:
+ 164              	.LVL12:
+ 165              	.LBE7:
+ 166              	.LBE6:
+ 127:main.c        ****     // Uruchomienie przerwań co 1/2 s.
+ 128:main.c        ****     init_irq(100, 50);
+ 129:main.c        **** 
+ 130:main.c        ****     /**********************************************************************
+ 131:main.c        ****      * Ta część jest nieskończoną pętlą realizującą działania programu
+ 132:main.c        ****      * Należy jednak pamiętać, że część jego funkcjonalności realizowana
+ 133:main.c        ****      * jest za pomocą przerwań
+ 134:main.c        ****      **********************************************************************/
+ 135:main.c        ****     // Aktywne "mruganie" diodą
+ 136:main.c        ****     tBool dioda_swieci = FALSE;
+ 137:main.c        ****     while (TRUE)
+ 138:main.c        ****     {
+ 139:main.c        ****     	if (dioda_swieci)
+ 167              		.loc 1 139 0
+ 168 00b0 002C     		cmp	r4, #0
+ 169 00b2 03D0     		beq	.L2
+ 140:main.c        ****         {
+ 141:main.c        ****     		IOSET1 = DIODA_LEWA; // (1 << 16);
+ 170              		.loc 1 141 0
+ 171 00b4 214B     		ldr	r3, .L9+76
+ 142:main.c        ****     		simplePrintf("Nie swieci\n");
+ 172              		.loc 1 142 0
+ 173 00b6 2248     		ldr	r0, .L9+80
+ 141:main.c        ****     		simplePrintf("Nie swieci\n");
+ 174              		.loc 1 141 0
+ 175 00b8 1E60     		str	r6, [r3]
+ 176 00ba 02E0     		b	.L7
+ 177              	.L2:
+ 178              	.LVL13:
+ 143:main.c        ****         }
+ 144:main.c        ****         else
+ 145:main.c        ****         {
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 7
+
+
+ 146:main.c        ****         	IOCLR1 = DIODA_LEWA; //(1 << 16);
+ 179              		.loc 1 146 0
+ 180 00bc 214B     		ldr	r3, .L9+84
+ 147:main.c        ****         	simplePrintf("Swieci\n");
+ 181              		.loc 1 147 0
+ 182 00be 2248     		ldr	r0, .L9+88
+ 146:main.c        ****         	simplePrintf("Swieci\n");
+ 183              		.loc 1 146 0
+ 184 00c0 1E60     		str	r6, [r3]
+ 185              	.LVL14:
+ 186              	.L7:
+ 187              		.loc 1 147 0
+ 188 00c2 FFF7FEFF 		bl	simplePrintf
+ 189              	.LVL15:
+ 190              	.LBB8:
+ 191              	.LBB9:
+  62:main.c        ****     T0PR  = PERIPHERAL_CLOCK-1;             //jednostka w preskalerze
+ 192              		.loc 1 62 0
+ 193 00c6 0222     		movs	r2, #2
+ 194 00c8 204B     		ldr	r3, .L9+92
+  63:main.c        ****     T0MR0 = seconds;
+ 195              		.loc 1 63 0
+ 196 00ca 2149     		ldr	r1, .L9+96
+  62:main.c        ****     T0PR  = PERIPHERAL_CLOCK-1;             //jednostka w preskalerze
+ 197              		.loc 1 62 0
+ 198 00cc 1A60     		str	r2, [r3]
+  63:main.c        ****     T0MR0 = seconds;
+ 199              		.loc 1 63 0
+ 200 00ce 214A     		ldr	r2, .L9+100
+ 201 00d0 1160     		str	r1, [r2]
+  65:main.c        ****     T0MCR = MR0_S;                          //Licz do wartości w MR0 i zatrzymaj się
+ 202              		.loc 1 65 0
+ 203 00d2 FF21     		movs	r1, #255
+  64:main.c        ****     T0IR  = TIMER_ALL_INT;                  //Resetowanie flag przerwaĹ„
+ 204              		.loc 1 64 0
+ 205 00d4 204A     		ldr	r2, .L9+104
+ 206 00d6 1560     		str	r5, [r2]
+  65:main.c        ****     T0MCR = MR0_S;                          //Licz do wartości w MR0 i zatrzymaj się
+ 207              		.loc 1 65 0
+ 208 00d8 204A     		ldr	r2, .L9+108
+ 209 00da 1160     		str	r1, [r2]
+  66:main.c        ****     T0TCR = TIMER_RUN;                      //Uruchom timer
+ 210              		.loc 1 66 0
+ 211 00dc 204A     		ldr	r2, .L9+112
+ 212 00de FB39     		subs	r1, r1, #251
+ 213 00e0 1160     		str	r1, [r2]
+  67:main.c        **** 
+ 214              		.loc 1 67 0
+ 215 00e2 1D60     		str	r5, [r3]
+ 216 00e4 6C40     		eors	r4, r5
+ 217              	.LVL16:
+ 218              	.L4:
+  72:main.c        ****     {
+ 219              		.loc 1 72 0
+ 220 00e6 1A68     		ldr	r2, [r3]
+ 221 00e8 2A42     		tst	r2, r5
+ 222 00ea FCD1     		bne	.L4
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 8
+
+
+ 223 00ec E0E7     		b	.L5
+ 224              	.L10:
+ 225 00ee C046     		.align	2
+ 226              	.L9:
+ 227 00f0 00000000 		.word	.LC0
+ 228 00f4 05000000 		.word	.LC2
+ 229 00f8 40000000 		.word	.LC4
+ 230 00fc 43000000 		.word	.LC6
+ 231 0100 58000000 		.word	.LC8
+ 232 0104 69000000 		.word	.LC10
+ 233 0108 14C002E0 		.word	-536690668
+ 234 010c 188002E0 		.word	-536707048
+ 235 0110 0CF0FFFF 		.word	-4084
+ 236 0114 14F1FFFF 		.word	-3820
+ 237 0118 00000000 		.word	IRQ_Test
+ 238 011c 14F2FFFF 		.word	-3564
+ 239 0120 10F0FFFF 		.word	-4080
+ 240 0124 048000E0 		.word	-536838140
+ 241 0128 0C8000E0 		.word	-536838132
+ 242 012c 188000E0 		.word	-536838120
+ 243 0130 1C8000E0 		.word	-536838116
+ 244 0134 008000E0 		.word	-536838144
+ 245 0138 148000E0 		.word	-536838124
+ 246 013c 148002E0 		.word	-536707052
+ 247 0140 81000000 		.word	.LC13
+ 248 0144 1C8002E0 		.word	-536707044
+ 249 0148 8D000000 		.word	.LC15
+ 250 014c 044000E0 		.word	-536854524
+ 251 0150 FFFF8303 		.word	58982399
+ 252 0154 0C4000E0 		.word	-536854516
+ 253 0158 184000E0 		.word	-536854504
+ 254 015c 004000E0 		.word	-536854528
+ 255 0160 144000E0 		.word	-536854508
+ 256              	.LBE9:
+ 257              	.LBE8:
+ 258              		.cfi_endproc
+ 259              	.LFE2:
+ 260              		.size	main, .-main
+ 261              		.section	.rodata.str1.1,"aMS",%progbits,1
+ 262              	.LC0:
+ 263 0000 0A0A0A0A 		.ascii	"\012\012\012\012\000"
+ 263      00
+ 264              	.LC2:
+ 265 0005 0A2A2A2A 		.ascii	"\012***********************************************"
+ 265      2A2A2A2A 
+ 265      2A2A2A2A 
+ 265      2A2A2A2A 
+ 265      2A2A2A2A 
+ 266 0035 2A2A2A2A 		.ascii	"**********\000"
+ 266      2A2A2A2A 
+ 266      2A2A00
+ 267              	.LC4:
+ 268 0040 0A2A00   		.ascii	"\012*\000"
+ 269              	.LC6:
+ 270 0043 0A2A2053 		.ascii	"\012* Systemy Wbudowane\000"
+ 270      79737465 
+ 270      6D792057 
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 9
+
+
+ 270      6275646F 
+ 270      77616E65 
+ 271              	.LC8:
+ 272 0058 0A2A2057 		.ascii	"\012* Wydzial FTIMS\000"
+ 272      79647A69 
+ 272      616C2046 
+ 272      54494D53 
+ 272      00
+ 273              	.LC10:
+ 274 0069 0A2A204D 		.ascii	"\012* Moj pierwszy program\000"
+ 274      6F6A2070 
+ 274      69657277 
+ 274      737A7920 
+ 274      70726F67 
+ 275              	.LC13:
+ 276 0081 4E696520 		.ascii	"Nie swieci\012\000"
+ 276      73776965 
+ 276      63690A00 
+ 277              	.LC15:
+ 278 008d 53776965 		.ascii	"Swieci\012\000"
+ 278      63690A00 
+ 279              		.text
+ 280              	.Letext0:
+ 281              		.file 2 "general.h"
+ 282              		.file 3 "./startup/printf_init.h"
+ 283              		.file 4 "./startup/consol.h"
+ 284              		.section	.debug_info,"",%progbits
+ 285              	.Ldebug_info0:
+ 286 0000 21020000 		.4byte	0x221
+ 287 0004 0200     		.2byte	0x2
+ 288 0006 00000000 		.4byte	.Ldebug_abbrev0
+ 289 000a 04       		.byte	0x4
+ 290 000b 01       		.uleb128 0x1
+ 291 000c E4000000 		.4byte	.LASF19
+ 292 0010 0C       		.byte	0xc
+ 293 0011 1B000000 		.4byte	.LASF20
+ 294 0015 94000000 		.4byte	.LASF21
+ 295 0019 00000000 		.4byte	.Ldebug_ranges0+0
+ 296 001d 00000000 		.4byte	0
+ 297 0021 00000000 		.4byte	0
+ 298 0025 00000000 		.4byte	.Ldebug_line0
+ 299 0029 02       		.uleb128 0x2
+ 300 002a 74553800 		.ascii	"tU8\000"
+ 301 002e 02       		.byte	0x2
+ 302 002f 12       		.byte	0x12
+ 303 0030 34000000 		.4byte	0x34
+ 304 0034 03       		.uleb128 0x3
+ 305 0035 01       		.byte	0x1
+ 306 0036 08       		.byte	0x8
+ 307 0037 56000000 		.4byte	.LASF0
+ 308 003b 03       		.uleb128 0x3
+ 309 003c 02       		.byte	0x2
+ 310 003d 07       		.byte	0x7
+ 311 003e B2000000 		.4byte	.LASF1
+ 312 0042 04       		.uleb128 0x4
+ 313 0043 79010000 		.4byte	.LASF2
+ 314 0047 02       		.byte	0x2
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 10
+
+
+ 315 0048 14       		.byte	0x14
+ 316 0049 4D000000 		.4byte	0x4d
+ 317 004d 03       		.uleb128 0x3
+ 318 004e 04       		.byte	0x4
+ 319 004f 07       		.byte	0x7
+ 320 0050 0E000000 		.4byte	.LASF3
+ 321 0054 04       		.uleb128 0x4
+ 322 0055 3A000000 		.4byte	.LASF4
+ 323 0059 02       		.byte	0x2
+ 324 005a 15       		.byte	0x15
+ 325 005b 5F000000 		.4byte	0x5f
+ 326 005f 03       		.uleb128 0x3
+ 327 0060 08       		.byte	0x8
+ 328 0061 07       		.byte	0x7
+ 329 0062 3F000000 		.4byte	.LASF5
+ 330 0066 03       		.uleb128 0x3
+ 331 0067 01       		.byte	0x1
+ 332 0068 06       		.byte	0x6
+ 333 0069 C5000000 		.4byte	.LASF6
+ 334 006d 03       		.uleb128 0x3
+ 335 006e 02       		.byte	0x2
+ 336 006f 05       		.byte	0x5
+ 337 0070 7E000000 		.4byte	.LASF7
+ 338 0074 05       		.uleb128 0x5
+ 339 0075 04       		.byte	0x4
+ 340 0076 05       		.byte	0x5
+ 341 0077 696E7400 		.ascii	"int\000"
+ 342 007b 03       		.uleb128 0x3
+ 343 007c 08       		.byte	0x8
+ 344 007d 05       		.byte	0x5
+ 345 007e 00000000 		.4byte	.LASF8
+ 346 0082 06       		.uleb128 0x6
+ 347 0083 01       		.byte	0x1
+ 348 0084 34000000 		.4byte	0x34
+ 349 0088 02       		.byte	0x2
+ 350 0089 1A       		.byte	0x1a
+ 351 008a 9B000000 		.4byte	0x9b
+ 352 008e 07       		.uleb128 0x7
+ 353 008f 64010000 		.4byte	.LASF9
+ 354 0093 00       		.byte	0
+ 355 0094 07       		.uleb128 0x7
+ 356 0095 64000000 		.4byte	.LASF10
+ 357 0099 01       		.byte	0x1
+ 358 009a 00       		.byte	0
+ 359 009b 04       		.uleb128 0x4
+ 360 009c DE000000 		.4byte	.LASF11
+ 361 00a0 02       		.byte	0x2
+ 362 00a1 1B       		.byte	0x1b
+ 363 00a2 82000000 		.4byte	0x82
+ 364 00a6 08       		.uleb128 0x8
+ 365 00a7 77000000 		.4byte	.LASF12
+ 366 00ab 01       		.byte	0x1
+ 367 00ac 3C       		.byte	0x3c
+ 368 00ad 01       		.byte	0x1
+ 369 00ae 01       		.byte	0x1
+ 370 00af BF000000 		.4byte	0xbf
+ 371 00b3 09       		.uleb128 0x9
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 11
+
+
+ 372 00b4 71010000 		.4byte	.LASF14
+ 373 00b8 01       		.byte	0x1
+ 374 00b9 3C       		.byte	0x3c
+ 375 00ba 42000000 		.4byte	0x42
+ 376 00be 00       		.byte	0
+ 377 00bf 08       		.uleb128 0x8
+ 378 00c0 6E000000 		.4byte	.LASF13
+ 379 00c4 01       		.byte	0x1
+ 380 00c5 56       		.byte	0x56
+ 381 00c6 01       		.byte	0x1
+ 382 00c7 01       		.byte	0x1
+ 383 00c8 E3000000 		.4byte	0xe3
+ 384 00cc 09       		.uleb128 0x9
+ 385 00cd 6A010000 		.4byte	.LASF15
+ 386 00d1 01       		.byte	0x1
+ 387 00d2 56       		.byte	0x56
+ 388 00d3 42000000 		.4byte	0x42
+ 389 00d7 09       		.uleb128 0x9
+ 390 00d8 22000000 		.4byte	.LASF16
+ 391 00dc 01       		.byte	0x1
+ 392 00dd 56       		.byte	0x56
+ 393 00de 29000000 		.4byte	0x29
+ 394 00e2 00       		.byte	0
+ 395 00e3 0A       		.uleb128 0xa
+ 396 00e4 01       		.byte	0x1
+ 397 00e5 69000000 		.4byte	.LASF22
+ 398 00e9 01       		.byte	0x1
+ 399 00ea 67       		.byte	0x67
+ 400 00eb 01       		.byte	0x1
+ 401 00ec 74000000 		.4byte	0x74
+ 402 00f0 01       		.byte	0x1
+ 403 00f1 00000000 		.4byte	.LFB2
+ 404 00f5 64010000 		.4byte	.LFE2
+ 405 00f9 00000000 		.4byte	.LLST0
+ 406 00fd 01       		.byte	0x1
+ 407 00fe 0A020000 		.4byte	0x20a
+ 408 0102 0B       		.uleb128 0xb
+ 409 0103 2D000000 		.4byte	.LASF23
+ 410 0107 01       		.byte	0x1
+ 411 0108 88       		.byte	0x88
+ 412 0109 9B000000 		.4byte	0x9b
+ 413 010d 20000000 		.4byte	.LLST1
+ 414 0111 0C       		.uleb128 0xc
+ 415 0112 BF000000 		.4byte	0xbf
+ 416 0116 56000000 		.4byte	.LBB6
+ 417 011a B0000000 		.4byte	.LBE6
+ 418 011e 01       		.byte	0x1
+ 419 011f 80       		.byte	0x80
+ 420 0120 31010000 		.4byte	0x131
+ 421 0124 0D       		.uleb128 0xd
+ 422 0125 CC000000 		.4byte	0xcc
+ 423 0129 64       		.byte	0x64
+ 424 012a 0D       		.uleb128 0xd
+ 425 012b D7000000 		.4byte	0xd7
+ 426 012f 32       		.byte	0x32
+ 427 0130 00       		.byte	0
+ 428 0131 0C       		.uleb128 0xc
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 12
+
+
+ 429 0132 A6000000 		.4byte	0xa6
+ 430 0136 C6000000 		.4byte	.LBB8
+ 431 013a 64010000 		.4byte	.LBE8
+ 432 013e 01       		.byte	0x1
+ 433 013f 96       		.byte	0x96
+ 434 0140 4B010000 		.4byte	0x14b
+ 435 0144 0D       		.uleb128 0xd
+ 436 0145 B3000000 		.4byte	0xb3
+ 437 0149 01       		.byte	0x1
+ 438 014a 00       		.byte	0
+ 439 014b 0E       		.uleb128 0xe
+ 440 014c 06000000 		.4byte	.LVL0
+ 441 0150 0A020000 		.4byte	0x20a
+ 442 0154 0F       		.uleb128 0xf
+ 443 0155 0C000000 		.4byte	.LVL1
+ 444 0159 17020000 		.4byte	0x217
+ 445 015d 6B010000 		.4byte	0x16b
+ 446 0161 10       		.uleb128 0x10
+ 447 0162 01       		.byte	0x1
+ 448 0163 50       		.byte	0x50
+ 449 0164 05       		.byte	0x5
+ 450 0165 03       		.byte	0x3
+ 451 0166 00000000 		.4byte	.LC0
+ 452 016a 00       		.byte	0
+ 453 016b 0F       		.uleb128 0xf
+ 454 016c 14000000 		.4byte	.LVL2
+ 455 0170 17020000 		.4byte	0x217
+ 456 0174 7F010000 		.4byte	0x17f
+ 457 0178 10       		.uleb128 0x10
+ 458 0179 01       		.byte	0x1
+ 459 017a 50       		.byte	0x50
+ 460 017b 02       		.byte	0x2
+ 461 017c 74       		.byte	0x74
+ 462 017d 00       		.sleb128 0
+ 463 017e 00       		.byte	0
+ 464 017f 0F       		.uleb128 0xf
+ 465 0180 1C000000 		.4byte	.LVL3
+ 466 0184 17020000 		.4byte	0x217
+ 467 0188 93010000 		.4byte	0x193
+ 468 018c 10       		.uleb128 0x10
+ 469 018d 01       		.byte	0x1
+ 470 018e 50       		.byte	0x50
+ 471 018f 02       		.byte	0x2
+ 472 0190 75       		.byte	0x75
+ 473 0191 00       		.sleb128 0
+ 474 0192 00       		.byte	0
+ 475 0193 0F       		.uleb128 0xf
+ 476 0194 22000000 		.4byte	.LVL4
+ 477 0198 17020000 		.4byte	0x217
+ 478 019c AA010000 		.4byte	0x1aa
+ 479 01a0 10       		.uleb128 0x10
+ 480 01a1 01       		.byte	0x1
+ 481 01a2 50       		.byte	0x50
+ 482 01a3 05       		.byte	0x5
+ 483 01a4 03       		.byte	0x3
+ 484 01a5 43000000 		.4byte	.LC6
+ 485 01a9 00       		.byte	0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 13
+
+
+ 486 01aa 0F       		.uleb128 0xf
+ 487 01ab 28000000 		.4byte	.LVL5
+ 488 01af 17020000 		.4byte	0x217
+ 489 01b3 C1010000 		.4byte	0x1c1
+ 490 01b7 10       		.uleb128 0x10
+ 491 01b8 01       		.byte	0x1
+ 492 01b9 50       		.byte	0x50
+ 493 01ba 05       		.byte	0x5
+ 494 01bb 03       		.byte	0x3
+ 495 01bc 58000000 		.4byte	.LC8
+ 496 01c0 00       		.byte	0
+ 497 01c1 0F       		.uleb128 0xf
+ 498 01c2 2E000000 		.4byte	.LVL6
+ 499 01c6 17020000 		.4byte	0x217
+ 500 01ca D8010000 		.4byte	0x1d8
+ 501 01ce 10       		.uleb128 0x10
+ 502 01cf 01       		.byte	0x1
+ 503 01d0 50       		.byte	0x50
+ 504 01d1 05       		.byte	0x5
+ 505 01d2 03       		.byte	0x3
+ 506 01d3 69000000 		.4byte	.LC10
+ 507 01d7 00       		.byte	0
+ 508 01d8 0F       		.uleb128 0xf
+ 509 01d9 34000000 		.4byte	.LVL7
+ 510 01dd 17020000 		.4byte	0x217
+ 511 01e1 EC010000 		.4byte	0x1ec
+ 512 01e5 10       		.uleb128 0x10
+ 513 01e6 01       		.byte	0x1
+ 514 01e7 50       		.byte	0x50
+ 515 01e8 02       		.byte	0x2
+ 516 01e9 75       		.byte	0x75
+ 517 01ea 00       		.sleb128 0
+ 518 01eb 00       		.byte	0
+ 519 01ec 0F       		.uleb128 0xf
+ 520 01ed 3A000000 		.4byte	.LVL8
+ 521 01f1 17020000 		.4byte	0x217
+ 522 01f5 00020000 		.4byte	0x200
+ 523 01f9 10       		.uleb128 0x10
+ 524 01fa 01       		.byte	0x1
+ 525 01fb 50       		.byte	0x50
+ 526 01fc 02       		.byte	0x2
+ 527 01fd 74       		.byte	0x74
+ 528 01fe 00       		.sleb128 0
+ 529 01ff 00       		.byte	0
+ 530 0200 0E       		.uleb128 0xe
+ 531 0201 C6000000 		.4byte	.LVL15
+ 532 0205 17020000 		.4byte	0x217
+ 533 0209 00       		.byte	0
+ 534 020a 11       		.uleb128 0x11
+ 535 020b 01       		.byte	0x1
+ 536 020c 01       		.byte	0x1
+ 537 020d 88000000 		.4byte	.LASF17
+ 538 0211 88000000 		.4byte	.LASF17
+ 539 0215 03       		.byte	0x3
+ 540 0216 31       		.byte	0x31
+ 541 0217 11       		.uleb128 0x11
+ 542 0218 01       		.byte	0x1
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 14
+
+
+ 543 0219 01       		.byte	0x1
+ 544 021a D1000000 		.4byte	.LASF18
+ 545 021e D1000000 		.4byte	.LASF18
+ 546 0222 04       		.byte	0x4
+ 547 0223 89       		.byte	0x89
+ 548 0224 00       		.byte	0
+ 549              		.section	.debug_abbrev,"",%progbits
+ 550              	.Ldebug_abbrev0:
+ 551 0000 01       		.uleb128 0x1
+ 552 0001 11       		.uleb128 0x11
+ 553 0002 01       		.byte	0x1
+ 554 0003 25       		.uleb128 0x25
+ 555 0004 0E       		.uleb128 0xe
+ 556 0005 13       		.uleb128 0x13
+ 557 0006 0B       		.uleb128 0xb
+ 558 0007 03       		.uleb128 0x3
+ 559 0008 0E       		.uleb128 0xe
+ 560 0009 1B       		.uleb128 0x1b
+ 561 000a 0E       		.uleb128 0xe
+ 562 000b 55       		.uleb128 0x55
+ 563 000c 06       		.uleb128 0x6
+ 564 000d 11       		.uleb128 0x11
+ 565 000e 01       		.uleb128 0x1
+ 566 000f 52       		.uleb128 0x52
+ 567 0010 01       		.uleb128 0x1
+ 568 0011 10       		.uleb128 0x10
+ 569 0012 06       		.uleb128 0x6
+ 570 0013 00       		.byte	0
+ 571 0014 00       		.byte	0
+ 572 0015 02       		.uleb128 0x2
+ 573 0016 16       		.uleb128 0x16
+ 574 0017 00       		.byte	0
+ 575 0018 03       		.uleb128 0x3
+ 576 0019 08       		.uleb128 0x8
+ 577 001a 3A       		.uleb128 0x3a
+ 578 001b 0B       		.uleb128 0xb
+ 579 001c 3B       		.uleb128 0x3b
+ 580 001d 0B       		.uleb128 0xb
+ 581 001e 49       		.uleb128 0x49
+ 582 001f 13       		.uleb128 0x13
+ 583 0020 00       		.byte	0
+ 584 0021 00       		.byte	0
+ 585 0022 03       		.uleb128 0x3
+ 586 0023 24       		.uleb128 0x24
+ 587 0024 00       		.byte	0
+ 588 0025 0B       		.uleb128 0xb
+ 589 0026 0B       		.uleb128 0xb
+ 590 0027 3E       		.uleb128 0x3e
+ 591 0028 0B       		.uleb128 0xb
+ 592 0029 03       		.uleb128 0x3
+ 593 002a 0E       		.uleb128 0xe
+ 594 002b 00       		.byte	0
+ 595 002c 00       		.byte	0
+ 596 002d 04       		.uleb128 0x4
+ 597 002e 16       		.uleb128 0x16
+ 598 002f 00       		.byte	0
+ 599 0030 03       		.uleb128 0x3
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 15
+
+
+ 600 0031 0E       		.uleb128 0xe
+ 601 0032 3A       		.uleb128 0x3a
+ 602 0033 0B       		.uleb128 0xb
+ 603 0034 3B       		.uleb128 0x3b
+ 604 0035 0B       		.uleb128 0xb
+ 605 0036 49       		.uleb128 0x49
+ 606 0037 13       		.uleb128 0x13
+ 607 0038 00       		.byte	0
+ 608 0039 00       		.byte	0
+ 609 003a 05       		.uleb128 0x5
+ 610 003b 24       		.uleb128 0x24
+ 611 003c 00       		.byte	0
+ 612 003d 0B       		.uleb128 0xb
+ 613 003e 0B       		.uleb128 0xb
+ 614 003f 3E       		.uleb128 0x3e
+ 615 0040 0B       		.uleb128 0xb
+ 616 0041 03       		.uleb128 0x3
+ 617 0042 08       		.uleb128 0x8
+ 618 0043 00       		.byte	0
+ 619 0044 00       		.byte	0
+ 620 0045 06       		.uleb128 0x6
+ 621 0046 04       		.uleb128 0x4
+ 622 0047 01       		.byte	0x1
+ 623 0048 0B       		.uleb128 0xb
+ 624 0049 0B       		.uleb128 0xb
+ 625 004a 49       		.uleb128 0x49
+ 626 004b 13       		.uleb128 0x13
+ 627 004c 3A       		.uleb128 0x3a
+ 628 004d 0B       		.uleb128 0xb
+ 629 004e 3B       		.uleb128 0x3b
+ 630 004f 0B       		.uleb128 0xb
+ 631 0050 01       		.uleb128 0x1
+ 632 0051 13       		.uleb128 0x13
+ 633 0052 00       		.byte	0
+ 634 0053 00       		.byte	0
+ 635 0054 07       		.uleb128 0x7
+ 636 0055 28       		.uleb128 0x28
+ 637 0056 00       		.byte	0
+ 638 0057 03       		.uleb128 0x3
+ 639 0058 0E       		.uleb128 0xe
+ 640 0059 1C       		.uleb128 0x1c
+ 641 005a 0B       		.uleb128 0xb
+ 642 005b 00       		.byte	0
+ 643 005c 00       		.byte	0
+ 644 005d 08       		.uleb128 0x8
+ 645 005e 2E       		.uleb128 0x2e
+ 646 005f 01       		.byte	0x1
+ 647 0060 03       		.uleb128 0x3
+ 648 0061 0E       		.uleb128 0xe
+ 649 0062 3A       		.uleb128 0x3a
+ 650 0063 0B       		.uleb128 0xb
+ 651 0064 3B       		.uleb128 0x3b
+ 652 0065 0B       		.uleb128 0xb
+ 653 0066 27       		.uleb128 0x27
+ 654 0067 0C       		.uleb128 0xc
+ 655 0068 20       		.uleb128 0x20
+ 656 0069 0B       		.uleb128 0xb
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 16
+
+
+ 657 006a 01       		.uleb128 0x1
+ 658 006b 13       		.uleb128 0x13
+ 659 006c 00       		.byte	0
+ 660 006d 00       		.byte	0
+ 661 006e 09       		.uleb128 0x9
+ 662 006f 05       		.uleb128 0x5
+ 663 0070 00       		.byte	0
+ 664 0071 03       		.uleb128 0x3
+ 665 0072 0E       		.uleb128 0xe
+ 666 0073 3A       		.uleb128 0x3a
+ 667 0074 0B       		.uleb128 0xb
+ 668 0075 3B       		.uleb128 0x3b
+ 669 0076 0B       		.uleb128 0xb
+ 670 0077 49       		.uleb128 0x49
+ 671 0078 13       		.uleb128 0x13
+ 672 0079 00       		.byte	0
+ 673 007a 00       		.byte	0
+ 674 007b 0A       		.uleb128 0xa
+ 675 007c 2E       		.uleb128 0x2e
+ 676 007d 01       		.byte	0x1
+ 677 007e 3F       		.uleb128 0x3f
+ 678 007f 0C       		.uleb128 0xc
+ 679 0080 03       		.uleb128 0x3
+ 680 0081 0E       		.uleb128 0xe
+ 681 0082 3A       		.uleb128 0x3a
+ 682 0083 0B       		.uleb128 0xb
+ 683 0084 3B       		.uleb128 0x3b
+ 684 0085 0B       		.uleb128 0xb
+ 685 0086 27       		.uleb128 0x27
+ 686 0087 0C       		.uleb128 0xc
+ 687 0088 49       		.uleb128 0x49
+ 688 0089 13       		.uleb128 0x13
+ 689 008a 8701     		.uleb128 0x87
+ 690 008c 0C       		.uleb128 0xc
+ 691 008d 11       		.uleb128 0x11
+ 692 008e 01       		.uleb128 0x1
+ 693 008f 12       		.uleb128 0x12
+ 694 0090 01       		.uleb128 0x1
+ 695 0091 40       		.uleb128 0x40
+ 696 0092 06       		.uleb128 0x6
+ 697 0093 9642     		.uleb128 0x2116
+ 698 0095 0C       		.uleb128 0xc
+ 699 0096 01       		.uleb128 0x1
+ 700 0097 13       		.uleb128 0x13
+ 701 0098 00       		.byte	0
+ 702 0099 00       		.byte	0
+ 703 009a 0B       		.uleb128 0xb
+ 704 009b 34       		.uleb128 0x34
+ 705 009c 00       		.byte	0
+ 706 009d 03       		.uleb128 0x3
+ 707 009e 0E       		.uleb128 0xe
+ 708 009f 3A       		.uleb128 0x3a
+ 709 00a0 0B       		.uleb128 0xb
+ 710 00a1 3B       		.uleb128 0x3b
+ 711 00a2 0B       		.uleb128 0xb
+ 712 00a3 49       		.uleb128 0x49
+ 713 00a4 13       		.uleb128 0x13
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 17
+
+
+ 714 00a5 02       		.uleb128 0x2
+ 715 00a6 06       		.uleb128 0x6
+ 716 00a7 00       		.byte	0
+ 717 00a8 00       		.byte	0
+ 718 00a9 0C       		.uleb128 0xc
+ 719 00aa 1D       		.uleb128 0x1d
+ 720 00ab 01       		.byte	0x1
+ 721 00ac 31       		.uleb128 0x31
+ 722 00ad 13       		.uleb128 0x13
+ 723 00ae 11       		.uleb128 0x11
+ 724 00af 01       		.uleb128 0x1
+ 725 00b0 12       		.uleb128 0x12
+ 726 00b1 01       		.uleb128 0x1
+ 727 00b2 58       		.uleb128 0x58
+ 728 00b3 0B       		.uleb128 0xb
+ 729 00b4 59       		.uleb128 0x59
+ 730 00b5 0B       		.uleb128 0xb
+ 731 00b6 01       		.uleb128 0x1
+ 732 00b7 13       		.uleb128 0x13
+ 733 00b8 00       		.byte	0
+ 734 00b9 00       		.byte	0
+ 735 00ba 0D       		.uleb128 0xd
+ 736 00bb 05       		.uleb128 0x5
+ 737 00bc 00       		.byte	0
+ 738 00bd 31       		.uleb128 0x31
+ 739 00be 13       		.uleb128 0x13
+ 740 00bf 1C       		.uleb128 0x1c
+ 741 00c0 0B       		.uleb128 0xb
+ 742 00c1 00       		.byte	0
+ 743 00c2 00       		.byte	0
+ 744 00c3 0E       		.uleb128 0xe
+ 745 00c4 898201   		.uleb128 0x4109
+ 746 00c7 00       		.byte	0
+ 747 00c8 11       		.uleb128 0x11
+ 748 00c9 01       		.uleb128 0x1
+ 749 00ca 31       		.uleb128 0x31
+ 750 00cb 13       		.uleb128 0x13
+ 751 00cc 00       		.byte	0
+ 752 00cd 00       		.byte	0
+ 753 00ce 0F       		.uleb128 0xf
+ 754 00cf 898201   		.uleb128 0x4109
+ 755 00d2 01       		.byte	0x1
+ 756 00d3 11       		.uleb128 0x11
+ 757 00d4 01       		.uleb128 0x1
+ 758 00d5 31       		.uleb128 0x31
+ 759 00d6 13       		.uleb128 0x13
+ 760 00d7 01       		.uleb128 0x1
+ 761 00d8 13       		.uleb128 0x13
+ 762 00d9 00       		.byte	0
+ 763 00da 00       		.byte	0
+ 764 00db 10       		.uleb128 0x10
+ 765 00dc 8A8201   		.uleb128 0x410a
+ 766 00df 00       		.byte	0
+ 767 00e0 02       		.uleb128 0x2
+ 768 00e1 0A       		.uleb128 0xa
+ 769 00e2 9142     		.uleb128 0x2111
+ 770 00e4 0A       		.uleb128 0xa
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 18
+
+
+ 771 00e5 00       		.byte	0
+ 772 00e6 00       		.byte	0
+ 773 00e7 11       		.uleb128 0x11
+ 774 00e8 2E       		.uleb128 0x2e
+ 775 00e9 00       		.byte	0
+ 776 00ea 3F       		.uleb128 0x3f
+ 777 00eb 0C       		.uleb128 0xc
+ 778 00ec 3C       		.uleb128 0x3c
+ 779 00ed 0C       		.uleb128 0xc
+ 780 00ee 8740     		.uleb128 0x2007
+ 781 00f0 0E       		.uleb128 0xe
+ 782 00f1 03       		.uleb128 0x3
+ 783 00f2 0E       		.uleb128 0xe
+ 784 00f3 3A       		.uleb128 0x3a
+ 785 00f4 0B       		.uleb128 0xb
+ 786 00f5 3B       		.uleb128 0x3b
+ 787 00f6 0B       		.uleb128 0xb
+ 788 00f7 00       		.byte	0
+ 789 00f8 00       		.byte	0
+ 790 00f9 00       		.byte	0
+ 791              		.section	.debug_loc,"",%progbits
+ 792              	.Ldebug_loc0:
+ 793              	.LLST0:
+ 794 0000 00000000 		.4byte	.LFB2
+ 795 0004 02000000 		.4byte	.LCFI0
+ 796 0008 0200     		.2byte	0x2
+ 797 000a 7D       		.byte	0x7d
+ 798 000b 00       		.sleb128 0
+ 799 000c 02000000 		.4byte	.LCFI0
+ 800 0010 64010000 		.4byte	.LFE2
+ 801 0014 0200     		.2byte	0x2
+ 802 0016 7D       		.byte	0x7d
+ 803 0017 10       		.sleb128 16
+ 804 0018 00000000 		.4byte	0
+ 805 001c 00000000 		.4byte	0
+ 806              	.LLST1:
+ 807 0020 B0000000 		.4byte	.LVL12
+ 808 0024 BC000000 		.4byte	.LVL13
+ 809 0028 0100     		.2byte	0x1
+ 810 002a 54       		.byte	0x54
+ 811 002b BC000000 		.4byte	.LVL13
+ 812 002f C2000000 		.4byte	.LVL14
+ 813 0033 0200     		.2byte	0x2
+ 814 0035 30       		.byte	0x30
+ 815 0036 9F       		.byte	0x9f
+ 816 0037 E6000000 		.4byte	.LVL16
+ 817 003b 64010000 		.4byte	.LFE2
+ 818 003f 0100     		.2byte	0x1
+ 819 0041 54       		.byte	0x54
+ 820 0042 00000000 		.4byte	0
+ 821 0046 00000000 		.4byte	0
+ 822              		.section	.debug_aranges,"",%progbits
+ 823 0000 1C000000 		.4byte	0x1c
+ 824 0004 0200     		.2byte	0x2
+ 825 0006 00000000 		.4byte	.Ldebug_info0
+ 826 000a 04       		.byte	0x4
+ 827 000b 00       		.byte	0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 19
+
+
+ 828 000c 0000     		.2byte	0
+ 829 000e 0000     		.2byte	0
+ 830 0010 00000000 		.4byte	.LFB2
+ 831 0014 64010000 		.4byte	.LFE2-.LFB2
+ 832 0018 00000000 		.4byte	0
+ 833 001c 00000000 		.4byte	0
+ 834              		.section	.debug_ranges,"",%progbits
+ 835              	.Ldebug_ranges0:
+ 836 0000 00000000 		.4byte	.LFB2
+ 837 0004 64010000 		.4byte	.LFE2
+ 838 0008 00000000 		.4byte	0
+ 839 000c 00000000 		.4byte	0
+ 840              		.section	.debug_line,"",%progbits
+ 841              	.Ldebug_line0:
+ 842 0000 9F000000 		.section	.debug_str,"MS",%progbits,1
+ 842      02005100 
+ 842      00000201 
+ 842      FB0E0D00 
+ 842      01010101 
+ 843              	.LASF8:
+ 844 0000 6C6F6E67 		.ascii	"long long int\000"
+ 844      206C6F6E 
+ 844      6720696E 
+ 844      7400
+ 845              	.LASF3:
+ 846 000e 756E7369 		.ascii	"unsigned int\000"
+ 846      676E6564 
+ 846      20696E74 
+ 846      00
+ 847              	.LASF20:
+ 848 001b 6D61696E 		.ascii	"main.c\000"
+ 848      2E6300
+ 849              	.LASF16:
+ 850 0022 64757479 		.ascii	"duty_cycle\000"
+ 850      5F637963 
+ 850      6C6500
+ 851              	.LASF23:
+ 852 002d 64696F64 		.ascii	"dioda_swieci\000"
+ 852      615F7377 
+ 852      69656369 
+ 852      00
+ 853              	.LASF4:
+ 854 003a 74553634 		.ascii	"tU64\000"
+ 854      00
+ 855              	.LASF5:
+ 856 003f 6C6F6E67 		.ascii	"long long unsigned int\000"
+ 856      206C6F6E 
+ 856      6720756E 
+ 856      7369676E 
+ 856      65642069 
+ 857              	.LASF0:
+ 858 0056 756E7369 		.ascii	"unsigned char\000"
+ 858      676E6564 
+ 858      20636861 
+ 858      7200
+ 859              	.LASF10:
+ 860 0064 54525545 		.ascii	"TRUE\000"
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 20
+
+
+ 860      00
+ 861              	.LASF22:
+ 862 0069 6D61696E 		.ascii	"main\000"
+ 862      00
+ 863              	.LASF13:
+ 864 006e 696E6974 		.ascii	"init_irq\000"
+ 864      5F697271 
+ 864      00
+ 865              	.LASF12:
+ 866 0077 7364656C 		.ascii	"sdelay\000"
+ 866      617900
+ 867              	.LASF7:
+ 868 007e 73686F72 		.ascii	"short int\000"
+ 868      7420696E 
+ 868      7400
+ 869              	.LASF17:
+ 870 0088 7072696E 		.ascii	"printf_init\000"
+ 870      74665F69 
+ 870      6E697400 
+ 871              	.LASF21:
+ 872 0094 433A5C45 		.ascii	"C:\\Embedded\\2138MiniDemo\\2138\000"
+ 872      6D626564 
+ 872      6465645C 
+ 872      32313338 
+ 872      4D696E69 
+ 873              	.LASF1:
+ 874 00b2 73686F72 		.ascii	"short unsigned int\000"
+ 874      7420756E 
+ 874      7369676E 
+ 874      65642069 
+ 874      6E7400
+ 875              	.LASF6:
+ 876 00c5 7369676E 		.ascii	"signed char\000"
+ 876      65642063 
+ 876      68617200 
+ 877              	.LASF18:
+ 878 00d1 73696D70 		.ascii	"simplePrintf\000"
+ 878      6C655072 
+ 878      696E7466 
+ 878      00
+ 879              	.LASF11:
+ 880 00de 74426F6F 		.ascii	"tBool\000"
+ 880      6C00
+ 881              	.LASF19:
+ 882 00e4 474E5520 		.ascii	"GNU C11 5.4.1 20160609 (release) [ARM/embedded-5-br"
+ 882      43313120 
+ 882      352E342E 
+ 882      31203230 
+ 882      31363036 
+ 883 0117 616E6368 		.ascii	"anch revision 237715] -mcpu=arm7tdmi -mthumb -mthum"
+ 883      20726576 
+ 883      6973696F 
+ 883      6E203233 
+ 883      37373135 
+ 884 014a 622D696E 		.ascii	"b-interwork -gdwarf-2 -Os\000"
+ 884      74657277 
+ 884      6F726B20 
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 21
+
+
+ 884      2D676477 
+ 884      6172662D 
+ 885              	.LASF9:
+ 886 0164 46414C53 		.ascii	"FALSE\000"
+ 886      4500
+ 887              	.LASF15:
+ 888 016a 70657269 		.ascii	"period\000"
+ 888      6F6400
+ 889              	.LASF14:
+ 890 0171 7365636F 		.ascii	"seconds\000"
+ 890      6E647300 
+ 891              	.LASF2:
+ 892 0179 74553332 		.ascii	"tU32\000"
+ 892      00
+ 893              		.ident	"GCC: (GNU Tools for ARM Embedded Processors) 5.4.1 20160609 (release) [ARM/embedded-5-bran
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s 			page 22
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 main.c
+C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s:22     .text.startup:00000000 $t
+C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s:27     .text.startup:00000000 main
+C:\Users\embedded\AppData\Local\Temp\ccRINGw5.s:227    .text.startup:000000f0 $d
+                     .debug_frame:00000010 $d
+
+UNDEFINED SYMBOLS
+__aeabi_lmul
+__aeabi_uldivmod
+printf_init
+simplePrintf
+IRQ_Test

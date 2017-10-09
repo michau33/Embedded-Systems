@@ -1,0 +1,26 @@
+what,kind,bundleId,bundleVersion,description,time
+java.version,sysinfo,,,"1.6.0_35",1486042822819
+java.vm.info,sysinfo,,,"mixed mode, sharing",1486042822819
+java.vm.name,sysinfo,,,"Java HotSpot(TM) Client VM",1486042822819
+java.vm.specification.name,sysinfo,,,"Java Virtual Machine Specification",1486042822819
+java.vm.specification.vendor,sysinfo,,,"Sun Microsystems Inc.",1486042822819
+java.vm.specification.version,sysinfo,,,"1.0",1486042822819
+java.vm.vendor,sysinfo,,,"Sun Microsystems Inc.",1486042822819
+java.vm.version,sysinfo,,,"20.10-b01",1486042822819
+started,bundle,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui",1486042828277
+started,bundle,org.eclipse.cdt.debug.core,6.0.0.200909110608,"org.eclipse.cdt.debug.core",1486042828427
+started,bundle,org.eclipse.cdt.debug.ui,6.0.0.200909110608,"org.eclipse.cdt.debug.ui",1486042828437
+started,bundle,com.zylin.embeddedcdt,4.11.1,"com.zylin.embeddedcdt",1486042832603
+started,bundle,org.eclipse.cdt.launch,6.0.0.200909110608,"org.eclipse.cdt.launch",1486042832643
+started,bundle,org.eclipse.cdt.debug.mi.ui,6.0.0.200909110608,"org.eclipse.cdt.debug.mi.ui",1486042833073
+started,bundle,org.eclipse.cdt.debug.mi.core,6.0.0.200909110608,"org.eclipse.cdt.debug.mi.core",1486042833093
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486042833194
+executed,command,org.eclipse.ui,3.5.2.M20100120-0800,"org.eclipse.ui.edit.copy",1486042845261
+executed,command,org.eclipse.ui,3.5.2.M20100120-0800,"org.eclipse.ui.edit.cut",1486042855085
+executed,command,org.eclipse.ui,3.5.2.M20100120-0800,"org.eclipse.ui.edit.paste",1486042906719
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486042923273
+started,bundle,org.eclipse.ui.externaltools,3.2.0.v20090504,"org.eclipse.ui.externaltools",1486042940908
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486042948089
+opened,view,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui.DebugView",1486042949180
+opened,editor,org.eclipse.cdt.debug.ui,6.0.0.200909110608,"org.eclipse.cdt.debug.ui.SourceNotFoundEditor",1486042949281
+activated,editor,org.eclipse.cdt.debug.ui,6.0.0.200909110608,"org.eclipse.cdt.debug.ui.SourceNotFoundEditor",1486042949291

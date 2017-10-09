@@ -1,0 +1,26 @@
+what,kind,bundleId,bundleVersion,description,time
+started,bundle,org.eclipse.cdt.debug.mi.core,6.0.0.200909110608,"org.eclipse.cdt.debug.mi.core",1486045074741
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486045199730
+error,log,,,"Variable references non-existent resource : ${workspace_loc:/2148}",1486045207882
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486045207892
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486045211907
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486045217315
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486045255560
+failed,command,org.eclipse.ui.externaltools,3.2.0.v20090504,"org.eclipse.ui.externalTools.commands.OpenExternalToolsConfigurations",1486045255570
+opened,view,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui.DebugView",1486045298121
+opened,view,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui.VariableView",1486045298161
+activated,perspective,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui.DebugPerspective",1486045298191
+activated,view,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui.DebugView",1486045299994
+executed,command,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui.commands.Terminate",1486045301676
+error,log,,,"Failed command: target remote localhost:3333",1486045310409
+error,log,,,"Failed command: monitor reset",1486045310539
+error,log,,,"Failed command: monitor wait 500",1486045310639
+error,log,,,"Failed command: monitor soft_reset_halt",1486045310739
+error,log,,,"Internal error logged from CDI Debug: ",1486045310830
+error,log,,,"Internal error logged from CDI Debug: ",1486045310840
+activated,perspective,org.eclipse.cdt.ui,5.1.1.200909110608,"org.eclipse.cdt.ui.CPerspective",1486045311380
+activated,view,org.eclipse.ui.console,3.4.0.v20090513,"org.eclipse.ui.console.ConsoleView",1486045311380
+activated,perspective,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui.DebugPerspective",1486045321976
+opened,view,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui.BreakpointView",1486045322276
+opened,view,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui.MemoryView",1486045322637
+opened,view,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui.RegisterView",1486045322657

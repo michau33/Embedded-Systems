@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename resource &apos;2148/startup/ea_init.h&apos; to &apos;printf_init.h&apos;" description="Rename resource &apos;ea_init.h&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="startup/ea_init.h" name="printf_init.h" stamp="1486039052933" updateReferences="true"/>
+</session>

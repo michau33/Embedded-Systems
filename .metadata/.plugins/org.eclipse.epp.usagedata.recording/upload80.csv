@@ -1,0 +1,15 @@
+what,kind,bundleId,bundleVersion,description,time
+executed,command,org.eclipse.ui,3.5.2.M20100120-0800,"org.eclipse.ui.edit.delete",1487614162193
+executed,command,org.eclipse.ui,3.5.2.M20100120-0800,"org.eclipse.ui.edit.delete",1487614162683
+executed,command,org.eclipse.ui,3.5.2.M20100120-0800,"org.eclipse.ui.edit.delete",1487614190704
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1487614203672
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1487614209310
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1487614216180
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1487614286922
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1487614298899
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1487614309575
+closed,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1487614309665
+stopped,bundle,org.eclipse.compare.win32,1.0.0.I20090430-0408,"org.eclipse.compare.win32",1487614310176
+stopped,bundle,com.zylin.embeddedcdt,4.11.1,"com.zylin.embeddedcdt",1487614310176
+stopped,bundle,org.eclipse.cdt.debug.mi.ui,6.0.0.200909110608,"org.eclipse.cdt.debug.mi.ui",1487614310186
+stopped,bundle,org.eclipse.cdt.dsf.gdb.ui,2.0.0.200909110608,"org.eclipse.cdt.dsf.gdb.ui",1487614310216

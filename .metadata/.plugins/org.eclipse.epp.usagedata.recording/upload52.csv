@@ -1,0 +1,23 @@
+what,kind,bundleId,bundleVersion,description,time
+java.vm.specification.version,sysinfo,,,"1.0",1486044138529
+java.vm.vendor,sysinfo,,,"Sun Microsystems Inc.",1486044138529
+java.vm.version,sysinfo,,,"20.10-b01",1486044138529
+activated,view,org.eclipse.ui.navigator.resources,3.4.1.M20090826-0800,"org.eclipse.ui.navigator.ProjectExplorer",1486044139310
+started,bundle,org.eclipse.cdt.make.core,6.0.0.200909110608,"org.eclipse.cdt.make.core",1486044139500
+activated,editor,org.eclipse.cdt.ui,5.1.1.200909110608,"org.eclipse.cdt.ui.editor.CEditor",1486044143546
+activated,view,org.eclipse.ui.navigator.resources,3.4.1.M20090826-0800,"org.eclipse.ui.navigator.ProjectExplorer",1486044143566
+closed,editor,org.eclipse.cdt.ui,5.1.1.200909110608,"org.eclipse.cdt.ui.editor.CEditor",1486044143566
+started,bundle,org.eclipse.compare,3.5.2.r35x_20100113-0800,"org.eclipse.compare",1486044145539
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486044150586
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486044160190
+executed,command,org.eclipse.ui,3.5.2.M20100120-0800,"org.eclipse.ui.file.properties",1486044160190
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486044164977
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486044168802
+executed,command,org.eclipse.ui,3.5.2.M20100120-0800,"org.eclipse.ui.file.properties",1486044168812
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486044170234
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486044189292
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486044202861
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486044204594
+closed,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486044204664
+stopped,bundle,org.eclipse.compare.win32,1.0.0.I20090430-0408,"org.eclipse.compare.win32",1486044204804
+stopped,bundle,com.zylin.embeddedcdt,4.11.1,"com.zylin.embeddedcdt",1486044204804

@@ -1,0 +1,4876 @@
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 1
+
+
+   1              		.cpu arm7tdmi
+   2              		.fpu softvfp
+   3              		.eabi_attribute 20, 1
+   4              		.eabi_attribute 21, 1
+   5              		.eabi_attribute 23, 3
+   6              		.eabi_attribute 24, 1
+   7              		.eabi_attribute 25, 1
+   8              		.eabi_attribute 26, 1
+   9              		.eabi_attribute 30, 4
+  10              		.eabi_attribute 34, 0
+  11              		.eabi_attribute 18, 4
+  12              		.arm
+  13              		.syntax divided
+  14              		.file	"consol.c"
+  15              		.text
+  16              	.Ltext0:
+  17              		.cfi_sections	.debug_frame
+  18              		.align	2
+  19              		.global	consolInit
+  20              		.type	consolInit, %function
+  21              	consolInit:
+  22              	.LFB2:
+  23              		.file 1 "consol.c"
+   1:consol.c      **** /******************************************************************************
+   2:consol.c      ****  *
+   3:consol.c      ****  * Copyright:
+   4:consol.c      ****  *    (C) 2000 - 2005 Embedded Artists AB
+   5:consol.c      ****  *
+   6:consol.c      ****  * Description:
+   7:consol.c      ****  *    Framework specific implementation of consol
+   8:consol.c      ****  *
+   9:consol.c      ****  *****************************************************************************/
+  10:consol.c      **** 
+  11:consol.c      **** 
+  12:consol.c      **** /******************************************************************************
+  13:consol.c      ****  * Includes
+  14:consol.c      ****  *****************************************************************************/
+  15:consol.c      **** 
+  16:consol.c      **** #include "lpc2xxx.h"                            /* LPC2xxx definitions */
+  17:consol.c      **** #include <string.h>
+  18:consol.c      **** #include <stdlib.h>
+  19:consol.c      **** #include "config.h"
+  20:consol.c      **** #include "consol.h"
+  21:consol.c      **** #include "framework.h"
+  22:consol.c      **** 
+  23:consol.c      **** #if (CONSOLE_API_PRINTF == 1) || (CONSOLE_API_SCANF == 1) //own simple printf() or scanf()
+  24:consol.c      **** #include <stdarg.h>
+  25:consol.c      **** #endif
+  26:consol.c      **** 
+  27:consol.c      **** #define UART_DLL_VALUE (unsigned short)((PCLK / (CONSOL_BITRATE * 16.0)) + 0.5)
+  28:consol.c      **** 
+  29:consol.c      **** #if (CONSOLE_API_SCANF == 1)  //SIMPLE
+  30:consol.c      **** #define __isalpha(c) (c >'9')
+  31:consol.c      **** #define __isupper(c) !(c & 0x20)
+  32:consol.c      **** #define __ishex(c) (((c >= '0')&&(c <= '9'))||((c >= 'A')&&(c <= 'F')))
+  33:consol.c      **** #define __ascii2hex(c) ((c <= '9')? c-'0': c-'A'+10)
+  34:consol.c      **** #endif
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 2
+
+
+  35:consol.c      **** 
+  36:consol.c      **** /******************************************************************************
+  37:consol.c      ****  * Implementation of local functions
+  38:consol.c      ****  *****************************************************************************/
+  39:consol.c      **** 
+  40:consol.c      **** #if (CONSOLE_API_PRINTF == 1)  //OWN_PRINTF
+  41:consol.c      **** /*****************************************************************************
+  42:consol.c      ****  *
+  43:consol.c      ****  * Description:
+  44:consol.c      ****  *    Print a number. 
+  45:consol.c      ****  *
+  46:consol.c      ****  * Params:
+  47:consol.c      ****  *    [in] outputFnk - Output function where characters to be printed are 
+  48:consol.c      ****  *                      sent 
+  49:consol.c      ****  * 
+  50:consol.c      ****  *                Params (callback):
+  51:consol.c      ****  *                   ch - Character to be printed 
+  52:consol.c      ****  *    [in] number    - Number to be printed 
+  53:consol.c      ****  *    [in] base      - Base when printing number (2-16) 
+  54:consol.c      ****  *
+  55:consol.c      ****  ****************************************************************************/
+  56:consol.c      **** static void
+  57:consol.c      **** printNum(void (*outputFnk) (char ch),
+  58:consol.c      ****          unsigned int number,
+  59:consol.c      ****          unsigned int base)
+  60:consol.c      **** {
+  61:consol.c      **** 	char *p;
+  62:consol.c      **** 	char  buf[33];
+  63:consol.c      **** 	char  hexChars[] = "0123456789abcdef";
+  64:consol.c      **** 	
+  65:consol.c      **** 	p = buf;
+  66:consol.c      **** 	
+  67:consol.c      **** 	do {
+  68:consol.c      **** 		*p++ = hexChars[number % base];
+  69:consol.c      **** 	} while (number /= base);
+  70:consol.c      **** 	
+  71:consol.c      **** 	do {
+  72:consol.c      **** 		outputFnk(*--p);
+  73:consol.c      **** 	} while (p > buf);
+  74:consol.c      **** }
+  75:consol.c      **** 
+  76:consol.c      **** /*****************************************************************************
+  77:consol.c      ****  *
+  78:consol.c      ****  * Description:
+  79:consol.c      ****  *    A simple implementation of printf that uses a minimum of stack space.
+  80:consol.c      ****  *
+  81:consol.c      ****  * Params:
+  82:consol.c      ****  *    [in] outputFnk - Output function where characters to be printed are 
+  83:consol.c      ****  *                      sent 
+  84:consol.c      ****  * 
+  85:consol.c      ****  *                Params (callback):
+  86:consol.c      ****  *                   ch - Character to be printed 
+  87:consol.c      ****  *    [in] fmt       - Format string that specifies what to be printed 
+  88:consol.c      ****  *    [in] ap        - Structure that hold information about the variable 
+  89:consol.c      ****  *                     number of parameters 
+  90:consol.c      ****  *
+  91:consol.c      ****  ****************************************************************************/
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 3
+
+
+  92:consol.c      **** static void
+  93:consol.c      **** simplePrint(void         (*outputFnk) (char ch),
+  94:consol.c      ****             const char * fmt,
+  95:consol.c      ****             va_list      ap)
+  96:consol.c      **** {
+  97:consol.c      ****   char          *p;
+  98:consol.c      ****   char           ch;
+  99:consol.c      ****   unsigned long  ul;
+ 100:consol.c      ****   unsigned char  lflag;
+ 101:consol.c      **** 
+ 102:consol.c      ****   for (;;)
+ 103:consol.c      ****   {
+ 104:consol.c      ****     while ((ch = *fmt++) != '%')
+ 105:consol.c      ****     {
+ 106:consol.c      ****       if (ch == '\0')
+ 107:consol.c      ****         	return;
+ 108:consol.c      ****       outputFnk(ch);
+ 109:consol.c      ****     }
+ 110:consol.c      ****     lflag = 0;
+ 111:consol.c      **** 
+ 112:consol.c      **** reswitch:
+ 113:consol.c      **** 
+ 114:consol.c      ****     switch (ch = *fmt++)
+ 115:consol.c      ****     {
+ 116:consol.c      ****     case '\0':
+ 117:consol.c      ****       return;
+ 118:consol.c      **** 
+ 119:consol.c      ****     case 'l':
+ 120:consol.c      ****       lflag = 1;
+ 121:consol.c      ****       goto reswitch;
+ 122:consol.c      **** 
+ 123:consol.c      ****     case 'c':
+ 124:consol.c      **** 	    ch = va_arg(ap, unsigned int);
+ 125:consol.c      **** 	    outputFnk(ch & 0x7f);
+ 126:consol.c      **** 	    break;
+ 127:consol.c      **** 
+ 128:consol.c      ****     case 's':
+ 129:consol.c      ****       p = va_arg(ap, char *);
+ 130:consol.c      ****       while ((ch = *p++) != 0)
+ 131:consol.c      **** 	    {
+ 132:consol.c      ****           outputFnk(ch);
+ 133:consol.c      **** 		}
+ 134:consol.c      ****       break;
+ 135:consol.c      **** 
+ 136:consol.c      ****     case 'd':
+ 137:consol.c      ****       if (lflag)
+ 138:consol.c      **** 	    {
+ 139:consol.c      **** 		  ul = va_arg(ap, int);
+ 140:consol.c      ****         }
+ 141:consol.c      **** 		else
+ 142:consol.c      **** 		{
+ 143:consol.c      **** 			ul = va_arg(ap, unsigned int);
+ 144:consol.c      **** 		};
+ 145:consol.c      ****       if ((long)ul < 0)
+ 146:consol.c      ****       {
+ 147:consol.c      ****         outputFnk('-');
+ 148:consol.c      ****         ul = -(long)ul;
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 4
+
+
+ 149:consol.c      ****       }
+ 150:consol.c      ****       printNum(outputFnk, ul, 10);
+ 151:consol.c      ****       break;
+ 152:consol.c      **** 
+ 153:consol.c      ****     case 'o':
+ 154:consol.c      ****       ul = va_arg(ap, unsigned int);
+ 155:consol.c      ****       printNum(outputFnk, ul, 8);
+ 156:consol.c      ****       break;
+ 157:consol.c      **** 
+ 158:consol.c      ****     case 'u':
+ 159:consol.c      ****       ul = va_arg(ap, unsigned int);
+ 160:consol.c      ****       printNum(outputFnk, ul, 10);
+ 161:consol.c      ****       break;
+ 162:consol.c      **** 
+ 163:consol.c      ****     case 'p':
+ 164:consol.c      ****       outputFnk('0');
+ 165:consol.c      ****       outputFnk('x');
+ 166:consol.c      ****       lflag = 1;
+ 167:consol.c      ****       // fall through
+ 168:consol.c      **** 
+ 169:consol.c      ****     case 'x':
+ 170:consol.c      ****       ul = va_arg(ap, unsigned int);
+ 171:consol.c      ****       printNum(outputFnk, ul, 16);
+ 172:consol.c      ****       break;
+ 173:consol.c      **** 
+ 174:consol.c      ****     default:
+ 175:consol.c      **** //      outputFnk('%');
+ 176:consol.c      ****       if (lflag)
+ 177:consol.c      ****         outputFnk('l');
+ 178:consol.c      ****       outputFnk(ch);
+ 179:consol.c      ****     }
+ 180:consol.c      ****   }
+ 181:consol.c      ****   va_end(ap);
+ 182:consol.c      **** }
+ 183:consol.c      **** #endif
+ 184:consol.c      **** 
+ 185:consol.c      **** /******************************************************************************
+ 186:consol.c      ****  * Implementation of public functions
+ 187:consol.c      ****  *****************************************************************************/
+ 188:consol.c      **** 
+ 189:consol.c      **** 
+ 190:consol.c      **** /*****************************************************************************
+ 191:consol.c      ****  *
+ 192:consol.c      ****  * Description:
+ 193:consol.c      ****  *    Initializes the consol channel (init UART, including setting bitrate and 
+ 194:consol.c      ****  *    GPIO). 
+ 195:consol.c      ****  *
+ 196:consol.c      ****  ****************************************************************************/
+ 197:consol.c      **** void
+ 198:consol.c      **** consolInit(void)
+ 199:consol.c      **** {
+  24              		.loc 1 199 0
+  25              		.cfi_startproc
+  26              		@ Function supports interworking.
+  27              		@ args = 0, pretend = 0, frame = 0
+  28              		@ frame_needed = 0, uses_anonymous_args = 0
+  29              		@ link register save eliminated.
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 5
+
+
+ 200:consol.c      **** #if (CONSOL_UART == 0)
+ 201:consol.c      ****   //enable uart #0 pins in GPIO (P0.0 = TxD0, P0.1 = RxD0)
+ 202:consol.c      ****   PINSEL0 = (PINSEL0 & 0xfffffff0) | 0x00000005;
+  30              		.loc 1 202 0
+  31 0000 40209FE5 		ldr	r2, .L2
+  32 0004 003092E5 		ldr	r3, [r2]
+  33 0008 0F30C3E3 		bic	r3, r3, #15
+  34 000c 053083E3 		orr	r3, r3, #5
+  35 0010 003082E5 		str	r3, [r2]
+ 203:consol.c      **** #else
+ 204:consol.c      ****   //enable uart #1 pins in GPIO (P0.8 = TxD1, P9.1 = RxD1)
+ 205:consol.c      ****   PINSEL0 = (PINSEL0 & 0xfff0ffff) | 0x00050000;
+ 206:consol.c      **** #endif
+ 207:consol.c      **** 
+ 208:consol.c      ****   //initialize bitrate (by first enable DL registers, DLAB-bit = 1)
+ 209:consol.c      ****   UART_LCR = 0x80;
+  36              		.loc 1 209 0
+  37 0014 8020A0E3 		mov	r2, #128
+  38 0018 2C309FE5 		ldr	r3, .L2+4
+  39 001c 0C2083E5 		str	r2, [r3, #12]
+ 210:consol.c      ****   UART_DLL = (unsigned char)(UART_DLL_VALUE & 0x00ff);
+  40              		.loc 1 210 0
+  41 0020 2020A0E3 		mov	r2, #32
+ 211:consol.c      ****   UART_DLM = (unsigned char)(UART_DLL_VALUE>>8);
+ 212:consol.c      ****   UART_LCR = 0x00;
+ 213:consol.c      **** 
+ 214:consol.c      ****   //initialize LCR: 8N1
+ 215:consol.c      ****   UART_LCR = 0x03;
+  42              		.loc 1 215 0
+  43 0024 0310A0E3 		mov	r1, #3
+ 210:consol.c      ****   UART_DLL = (unsigned char)(UART_DLL_VALUE & 0x00ff);
+  44              		.loc 1 210 0
+  45 0028 002083E5 		str	r2, [r3]
+ 211:consol.c      ****   UART_DLM = (unsigned char)(UART_DLL_VALUE>>8);
+  46              		.loc 1 211 0
+  47 002c 0020A0E3 		mov	r2, #0
+  48 0030 042083E5 		str	r2, [r3, #4]
+ 212:consol.c      **** 
+  49              		.loc 1 212 0
+  50 0034 0C2083E5 		str	r2, [r3, #12]
+  51              		.loc 1 215 0
+  52 0038 0C1083E5 		str	r1, [r3, #12]
+ 216:consol.c      **** 
+ 217:consol.c      ****   //reset FIFO
+ 218:consol.c      ****   UART_FCR = 0x00;
+  53              		.loc 1 218 0
+  54 003c 082083E5 		str	r2, [r3, #8]
+ 219:consol.c      **** 
+ 220:consol.c      ****   //clear interrupt bits
+ 221:consol.c      ****   UART_IER = 0x00;
+  55              		.loc 1 221 0
+  56 0040 042083E5 		str	r2, [r3, #4]
+  57 0044 1EFF2FE1 		bx	lr
+  58              	.L3:
+  59              		.align	2
+  60              	.L2:
+  61 0048 00C002E0 		.word	-536690688
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 6
+
+
+  62 004c 00C000E0 		.word	-536821760
+  63              		.cfi_endproc
+  64              	.LFE2:
+  65              		.size	consolInit, .-consolInit
+  66              		.align	2
+  67              		.global	consolSendChar
+  68              		.type	consolSendChar, %function
+  69              	consolSendChar:
+  70              	.LFB3:
+ 222:consol.c      **** }
+ 223:consol.c      **** 
+ 224:consol.c      **** /*****************************************************************************
+ 225:consol.c      ****  *
+ 226:consol.c      ****  * Description:
+ 227:consol.c      ****  *    Blocking consol output routine, i.e., the routine waits until the uart 
+ 228:consol.c      ****  *    buffer is free and then sends the character. 
+ 229:consol.c      ****  *
+ 230:consol.c      ****  * Params:
+ 231:consol.c      ****  *    [in] charToSend - The character to print (to the consol) 
+ 232:consol.c      ****  *
+ 233:consol.c      ****  ****************************************************************************/
+ 234:consol.c      **** void
+ 235:consol.c      **** consolSendChar(char charToSend)
+ 236:consol.c      **** {
+  71              		.loc 1 236 0
+  72              		.cfi_startproc
+  73              		@ Function supports interworking.
+  74              		@ args = 0, pretend = 0, frame = 0
+  75              		@ frame_needed = 0, uses_anonymous_args = 0
+  76              		@ link register save eliminated.
+  77              	.LVL0:
+ 237:consol.c      ****   //Wait until THR is empty
+ 238:consol.c      ****   while(!(UART_LSR & 0x20))
+  78              		.loc 1 238 0
+  79 0050 14209FE5 		ldr	r2, .L9
+  80              	.L5:
+  81              		.loc 1 238 0 is_stmt 0 discriminator 1
+  82 0054 143092E5 		ldr	r3, [r2, #20]
+  83 0058 200013E3 		tst	r3, #32
+  84 005c FCFFFF0A 		beq	.L5
+ 239:consol.c      ****     ;
+ 240:consol.c      ****   UART_THR = charToSend;
+  85              		.loc 1 240 0 is_stmt 1
+  86 0060 04309FE5 		ldr	r3, .L9
+  87 0064 000083E5 		str	r0, [r3]
+  88 0068 1EFF2FE1 		bx	lr
+  89              	.L10:
+  90              		.align	2
+  91              	.L9:
+  92 006c 00C000E0 		.word	-536821760
+  93              		.cfi_endproc
+  94              	.LFE3:
+  95              		.size	consolSendChar, .-consolSendChar
+  96              		.align	2
+  97              		.global	consolSendCh
+  98              		.type	consolSendCh, %function
+  99              	consolSendCh:
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 7
+
+
+ 100              	.LFB4:
+ 241:consol.c      **** }
+ 242:consol.c      **** 
+ 243:consol.c      **** /*****************************************************************************
+ 244:consol.c      ****  *
+ 245:consol.c      ****  * Description:
+ 246:consol.c      ****  *    Consol output routine that adds extra line feeds at line breaks. 
+ 247:consol.c      ****  *
+ 248:consol.c      ****  * Params:
+ 249:consol.c      ****  *    [in] charToSend - The character to print (to the consol) 
+ 250:consol.c      ****  *
+ 251:consol.c      ****  ****************************************************************************/
+ 252:consol.c      **** void
+ 253:consol.c      **** consolSendCh(char charToSend)
+ 254:consol.c      **** {
+ 101              		.loc 1 254 0
+ 102              		.cfi_startproc
+ 103              		@ Function supports interworking.
+ 104              		@ args = 0, pretend = 0, frame = 0
+ 105              		@ frame_needed = 0, uses_anonymous_args = 0
+ 106              	.LVL1:
+ 255:consol.c      ****   if(charToSend == '\n')
+ 107              		.loc 1 255 0
+ 108 0070 0A0050E3 		cmp	r0, #10
+ 254:consol.c      ****   if(charToSend == '\n')
+ 109              		.loc 1 254 0
+ 110 0074 0010A0E1 		mov	r1, r0
+ 111              		.loc 1 255 0
+ 112 0078 0400001A 		bne	.L15
+ 254:consol.c      ****   if(charToSend == '\n')
+ 113              		.loc 1 254 0
+ 114 007c 10402DE9 		stmfd	sp!, {r4, lr}
+ 115              	.LCFI0:
+ 116              		.cfi_def_cfa_offset 8
+ 117              		.cfi_offset 4, -8
+ 118              		.cfi_offset 14, -4
+ 256:consol.c      ****     consolSendChar('\r');
+ 119              		.loc 1 256 0
+ 120 0080 0D00A0E3 		mov	r0, #13
+ 121              	.LVL2:
+ 122 0084 FEFFFFEB 		bl	consolSendChar
+ 123              	.LVL3:
+ 257:consol.c      **** 
+ 258:consol.c      ****   consolSendChar(charToSend);
+ 124              		.loc 1 258 0
+ 125 0088 0100A0E1 		mov	r0, r1
+ 259:consol.c      **** }
+ 126              		.loc 1 259 0
+ 127 008c 1040BDE8 		ldmfd	sp!, {r4, lr}
+ 128              	.LCFI1:
+ 129              		.cfi_restore 14
+ 130              		.cfi_restore 4
+ 131              		.cfi_def_cfa_offset 0
+ 132              	.L15:
+ 258:consol.c      **** }
+ 133              		.loc 1 258 0
+ 134 0090 FEFFFFEA 		b	consolSendChar
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 8
+
+
+ 135              	.LVL4:
+ 136              		.cfi_endproc
+ 137              	.LFE4:
+ 138              		.size	consolSendCh, .-consolSendCh
+ 139              		.global	__aeabi_uidivmod
+ 140              		.global	__aeabi_uidiv
+ 141              		.align	2
+ 142              		.type	printNum.constprop.1, %function
+ 143              	printNum.constprop.1:
+ 144              	.LFB13:
+  57:consol.c      ****          unsigned int number,
+ 145              		.loc 1 57 0
+ 146              		.cfi_startproc
+ 147              		@ Function supports interworking.
+ 148              		@ args = 0, pretend = 0, frame = 56
+ 149              		@ frame_needed = 0, uses_anonymous_args = 0
+ 150              	.LVL5:
+ 151 0094 F0402DE9 		stmfd	sp!, {r4, r5, r6, r7, lr}
+ 152              	.LCFI2:
+ 153              		.cfi_def_cfa_offset 20
+ 154              		.cfi_offset 4, -20
+ 155              		.cfi_offset 5, -16
+ 156              		.cfi_offset 6, -12
+ 157              		.cfi_offset 7, -8
+ 158              		.cfi_offset 14, -4
+ 159 0098 3CD04DE2 		sub	sp, sp, #60
+ 160              	.LCFI3:
+ 161              		.cfi_def_cfa_offset 80
+  57:consol.c      ****          unsigned int number,
+ 162              		.loc 1 57 0
+ 163 009c 0050A0E1 		mov	r5, r0
+ 164 00a0 0160A0E1 		mov	r6, r1
+  63:consol.c      **** 	
+ 165              		.loc 1 63 0
+ 166 00a4 1120A0E3 		mov	r2, #17
+ 167 00a8 58109FE5 		ldr	r1, .L22
+ 168              	.LVL6:
+ 169 00ac 0D00A0E1 		mov	r0, sp
+ 170              	.LVL7:
+  65:consol.c      **** 	
+ 171              		.loc 1 65 0
+ 172 00b0 14408DE2 		add	r4, sp, #20
+  63:consol.c      **** 	
+ 173              		.loc 1 63 0
+ 174 00b4 FEFFFFEB 		bl	memcpy
+ 175              	.LVL8:
+ 176 00b8 0470A0E1 		mov	r7, r4
+ 177              	.LVL9:
+ 178              	.L17:
+  68:consol.c      **** 	} while (number /= base);
+ 179              		.loc 1 68 0
+ 180 00bc 0500A0E1 		mov	r0, r5
+ 181 00c0 0610A0E1 		mov	r1, r6
+ 182 00c4 FEFFFFEB 		bl	__aeabi_uidivmod
+ 183              	.LVL10:
+ 184 00c8 38308DE2 		add	r3, sp, #56
+ 185 00cc 011083E0 		add	r1, r3, r1
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 9
+
+
+ 186 00d0 383051E5 		ldrb	r3, [r1, #-56]	@ zero_extendqisi2
+  69:consol.c      **** 	
+ 187              		.loc 1 69 0
+ 188 00d4 0500A0E1 		mov	r0, r5
+ 189 00d8 0610A0E1 		mov	r1, r6
+  68:consol.c      **** 	} while (number /= base);
+ 190              		.loc 1 68 0
+ 191 00dc 0130C4E4 		strb	r3, [r4], #1
+ 192              	.LVL11:
+  69:consol.c      **** 	
+ 193              		.loc 1 69 0
+ 194 00e0 FEFFFFEB 		bl	__aeabi_uidiv
+ 195              	.LVL12:
+ 196 00e4 005050E2 		subs	r5, r0, #0
+ 197 00e8 F3FFFF1A 		bne	.L17
+ 198              	.LVL13:
+ 199              	.L18:
+  72:consol.c      **** 	} while (p > buf);
+ 200              		.loc 1 72 0
+ 201 00ec 010074E5 		ldrb	r0, [r4, #-1]!	@ zero_extendqisi2
+ 202              	.LVL14:
+ 203 00f0 FEFFFFEB 		bl	consolSendCh
+ 204              	.LVL15:
+  73:consol.c      **** }
+ 205              		.loc 1 73 0
+ 206 00f4 070054E1 		cmp	r4, r7
+ 207 00f8 FBFFFF8A 		bhi	.L18
+  74:consol.c      **** 
+ 208              		.loc 1 74 0
+ 209 00fc 3CD08DE2 		add	sp, sp, #60
+ 210              	.LCFI4:
+ 211              		.cfi_def_cfa_offset 20
+ 212              		@ sp needed
+ 213 0100 F040BDE8 		ldmfd	sp!, {r4, r5, r6, r7, lr}
+ 214              	.LCFI5:
+ 215              		.cfi_restore 14
+ 216              		.cfi_restore 7
+ 217              		.cfi_restore 6
+ 218              		.cfi_restore 5
+ 219              		.cfi_restore 4
+ 220              		.cfi_def_cfa_offset 0
+ 221              	.LVL16:
+ 222 0104 1EFF2FE1 		bx	lr
+ 223              	.L23:
+ 224              		.align	2
+ 225              	.L22:
+ 226 0108 00000000 		.word	.LC0
+ 227              		.cfi_endproc
+ 228              	.LFE13:
+ 229              		.size	printNum.constprop.1, .-printNum.constprop.1
+ 230              		.align	2
+ 231              		.global	consolSendString
+ 232              		.type	consolSendString, %function
+ 233              	consolSendString:
+ 234              	.LFB5:
+ 260:consol.c      **** 
+ 261:consol.c      **** /*****************************************************************************
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 10
+
+
+ 262:consol.c      ****  *
+ 263:consol.c      ****  * Description:
+ 264:consol.c      ****  *    Print string to consol. 
+ 265:consol.c      ****  *
+ 266:consol.c      ****  * Params:
+ 267:consol.c      ****  *    [in] pString - Pointer to string to be printed 
+ 268:consol.c      ****  *
+ 269:consol.c      ****  ****************************************************************************/
+ 270:consol.c      **** void
+ 271:consol.c      **** consolSendString(char *pString)
+ 272:consol.c      **** {
+ 235              		.loc 1 272 0
+ 236              		.cfi_startproc
+ 237              		@ Function supports interworking.
+ 238              		@ args = 0, pretend = 0, frame = 0
+ 239              		@ frame_needed = 0, uses_anonymous_args = 0
+ 240              	.LVL17:
+ 241 010c 10402DE9 		stmfd	sp!, {r4, lr}
+ 242              	.LCFI6:
+ 243              		.cfi_def_cfa_offset 8
+ 244              		.cfi_offset 4, -8
+ 245              		.cfi_offset 14, -4
+ 246 0110 014040E2 		sub	r4, r0, #1
+ 247              	.LVL18:
+ 248              	.L25:
+ 273:consol.c      ****   while(*pString)
+ 249              		.loc 1 273 0
+ 250 0114 0100F4E5 		ldrb	r0, [r4, #1]!	@ zero_extendqisi2
+ 251              	.LVL19:
+ 252 0118 000050E3 		cmp	r0, #0
+ 253 011c 0100000A 		beq	.L28
+ 254              	.LVL20:
+ 274:consol.c      ****     consolSendCh(*pString++);
+ 255              		.loc 1 274 0
+ 256 0120 FEFFFFEB 		bl	consolSendCh
+ 257              	.LVL21:
+ 258 0124 FAFFFFEA 		b	.L25
+ 259              	.LVL22:
+ 260              	.L28:
+ 275:consol.c      **** }
+ 261              		.loc 1 275 0
+ 262 0128 1040BDE8 		ldmfd	sp!, {r4, lr}
+ 263              	.LCFI7:
+ 264              		.cfi_restore 14
+ 265              		.cfi_restore 4
+ 266              		.cfi_def_cfa_offset 0
+ 267              	.LVL23:
+ 268 012c 1EFF2FE1 		bx	lr
+ 269              		.cfi_endproc
+ 270              	.LFE5:
+ 271              		.size	consolSendString, .-consolSendString
+ 272              		.align	2
+ 273              		.global	consolSendNumber
+ 274              		.type	consolSendNumber, %function
+ 275              	consolSendNumber:
+ 276              	.LFB6:
+ 276:consol.c      **** 
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 11
+
+
+ 277:consol.c      **** /*****************************************************************************
+ 278:consol.c      ****  *
+ 279:consol.c      ****  * Description:
+ 280:consol.c      ****  *    Routine for printing integer numbers in various formats. The number is 
+ 281:consol.c      ****  *    printed in the specified 'base' using exactly 'noDigits', using +/- if 
+ 282:consol.c      ****  *    signed flag 'sign' is TRUE, and using the character specified in 'pad' 
+ 283:consol.c      ****  *    to pad extra characters. 
+ 284:consol.c      ****  *
+ 285:consol.c      ****  * Params:
+ 286:consol.c      ****  *    [in] base     - Base to print number in (2-16) 
+ 287:consol.c      ****  *    [in] noDigits - Number of digits to print (max 32) 
+ 288:consol.c      ****  *    [in] sign     - Flag if sign is to be used (TRUE), or not (FALSE) 
+ 289:consol.c      ****  *    [in] pad      - Character to pad any unused positions 
+ 290:consol.c      ****  *    [in] number   - Signed number to print 
+ 291:consol.c      ****  *
+ 292:consol.c      ****  ****************************************************************************/
+ 293:consol.c      **** void
+ 294:consol.c      **** consolSendNumber(unsigned char base,
+ 295:consol.c      ****                  unsigned char noDigits,
+ 296:consol.c      ****                  unsigned char sign,
+ 297:consol.c      ****                  char          pad,
+ 298:consol.c      ****                  int           number)
+ 299:consol.c      **** {
+ 277              		.loc 1 299 0
+ 278              		.cfi_startproc
+ 279              		@ Function supports interworking.
+ 280              		@ args = 4, pretend = 0, frame = 40
+ 281              		@ frame_needed = 0, uses_anonymous_args = 0
+ 282              	.LVL24:
+ 283 0130 F04F2DE9 		stmfd	sp!, {r4, r5, r6, r7, r8, r9, r10, fp, lr}
+ 284              	.LCFI8:
+ 285              		.cfi_def_cfa_offset 36
+ 286              		.cfi_offset 4, -36
+ 287              		.cfi_offset 5, -32
+ 288              		.cfi_offset 6, -28
+ 289              		.cfi_offset 7, -24
+ 290              		.cfi_offset 8, -20
+ 291              		.cfi_offset 9, -16
+ 292              		.cfi_offset 10, -12
+ 293              		.cfi_offset 11, -8
+ 294              		.cfi_offset 14, -4
+ 295 0134 0080A0E1 		mov	r8, r0
+ 300:consol.c      ****   static char    hexChars[16] = "0123456789ABCDEF";
+ 301:consol.c      ****   char          *pBuf;
+ 302:consol.c      ****   char           buf[32];
+ 303:consol.c      ****   unsigned int   numberAbs;
+ 304:consol.c      ****   unsigned char  count;
+ 305:consol.c      **** 
+ 306:consol.c      ****   // prepare negative number
+ 307:consol.c      ****   if(sign && (number < 0))
+ 296              		.loc 1 307 0
+ 297 0138 000092E2 		adds	r0, r2, #0
+ 298              	.LVL25:
+ 299 013c 0100A013 		movne	r0, #1
+ 299:consol.c      ****   static char    hexChars[16] = "0123456789ABCDEF";
+ 300              		.loc 1 299 0
+ 301 0140 2CD04DE2 		sub	sp, sp, #44
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 12
+
+
+ 302              	.LCFI9:
+ 303              		.cfi_def_cfa_offset 80
+ 299:consol.c      ****   static char    hexChars[16] = "0123456789ABCDEF";
+ 304              		.loc 1 299 0
+ 305 0144 50609DE5 		ldr	r6, [sp, #80]
+ 306 0148 04308DE5 		str	r3, [sp, #4]
+ 307              		.loc 1 307 0
+ 308 014c A63F10E0 		ands	r3, r0, r6, lsr #31
+ 309              	.LVL26:
+ 308:consol.c      ****     numberAbs = -number;
+ 309:consol.c      ****   else
+ 310:consol.c      ****     numberAbs = number;
+ 310              		.loc 1 310 0
+ 311 0150 0650A001 		moveq	r5, r6
+ 311:consol.c      **** 
+ 312:consol.c      ****   // setup little string buffer
+ 313:consol.c      ****   count = (noDigits - 1) - (sign ? 1 : 0);
+ 314:consol.c      ****   pBuf = buf + sizeof(buf);
+ 315:consol.c      ****   *--pBuf = '\0';
+ 312              		.loc 1 315 0
+ 313 0154 0030A0E3 		mov	r3, #0
+ 313:consol.c      ****   pBuf = buf + sizeof(buf);
+ 314              		.loc 1 313 0
+ 315 0158 011041E2 		sub	r1, r1, #1
+ 316              	.LVL27:
+ 308:consol.c      ****     numberAbs = -number;
+ 317              		.loc 1 308 0
+ 318 015c 00506612 		rsbne	r5, r6, #0
+ 319              	.LVL28:
+ 313:consol.c      ****   pBuf = buf + sizeof(buf);
+ 320              		.loc 1 313 0
+ 321 0160 010060E0 		rsb	r0, r0, r1
+ 322 0164 FF4000E2 		and	r4, r0, #255
+ 323              	.LVL29:
+ 316:consol.c      **** 
+ 317:consol.c      ****   // force calculation of first digit
+ 318:consol.c      ****   // (to prevent zero from not printing at all!!!)
+ 319:consol.c      ****   *--pBuf = hexChars[(numberAbs % base)];
+ 324              		.loc 1 319 0
+ 325 0168 0810A0E1 		mov	r1, r8
+ 326 016c 0500A0E1 		mov	r0, r5
+ 307:consol.c      ****     numberAbs = -number;
+ 327              		.loc 1 307 0
+ 328 0170 0270A0E1 		mov	r7, r2
+ 315:consol.c      **** 
+ 329              		.loc 1 315 0
+ 330 0174 2730CDE5 		strb	r3, [sp, #39]
+ 331              	.LVL30:
+ 332              		.loc 1 319 0
+ 333 0178 FEFFFFEB 		bl	__aeabi_uidivmod
+ 334              	.LVL31:
+ 335 017c A8B09FE5 		ldr	fp, .L45
+ 336 0180 0130DBE7 		ldrb	r3, [fp, r1]	@ zero_extendqisi2
+ 320:consol.c      ****   numberAbs /= base;
+ 337              		.loc 1 320 0
+ 338 0184 0500A0E1 		mov	r0, r5
+ 339 0188 0810A0E1 		mov	r1, r8
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 13
+
+
+ 319:consol.c      ****   numberAbs /= base;
+ 340              		.loc 1 319 0
+ 341 018c 2630CDE5 		strb	r3, [sp, #38]
+ 342              		.loc 1 320 0
+ 343 0190 FEFFFFEB 		bl	__aeabi_uidiv
+ 344              	.LVL32:
+ 313:consol.c      ****   pBuf = buf + sizeof(buf);
+ 345              		.loc 1 313 0
+ 346 0194 0450A0E1 		mov	r5, r4
+ 347              	.LVL33:
+ 348              		.loc 1 320 0
+ 349 0198 00A0A0E1 		mov	r10, r0
+ 350              	.LVL34:
+ 351 019c 25908DE2 		add	r9, sp, #37
+ 352              	.LVL35:
+ 353              	.L32:
+ 321:consol.c      **** 
+ 322:consol.c      ****   // calculate remaining digits
+ 323:consol.c      ****   while(count--)
+ 354              		.loc 1 323 0
+ 355 01a0 015045E2 		sub	r5, r5, #1
+ 356              	.LVL36:
+ 357 01a4 FF5005E2 		and	r5, r5, #255
+ 358              	.LVL37:
+ 359 01a8 FF0055E3 		cmp	r5, #255
+ 360 01ac 0E00000A 		beq	.L44
+ 324:consol.c      ****   {
+ 325:consol.c      ****     if(numberAbs != 0)
+ 361              		.loc 1 325 0
+ 362 01b0 00005AE3 		cmp	r10, #0
+ 326:consol.c      ****     {
+ 327:consol.c      ****       //calculate next digit
+ 328:consol.c      ****       *--pBuf = hexChars[(numberAbs % base)];
+ 329:consol.c      ****       numberAbs /= base;
+ 330:consol.c      ****     }
+ 331:consol.c      ****     else
+ 332:consol.c      ****       // no more digits left, pad out to desired length
+ 333:consol.c      ****       *--pBuf = pad;
+ 363              		.loc 1 333 0
+ 364 01b4 0430DD05 		ldreqb	r3, [sp, #4]	@ zero_extendqisi2
+ 365 01b8 0030C905 		streqb	r3, [r9]
+ 325:consol.c      ****     {
+ 366              		.loc 1 325 0
+ 367 01bc 0800000A 		beq	.L34
+ 368              	.LVL38:
+ 328:consol.c      ****       numberAbs /= base;
+ 369              		.loc 1 328 0
+ 370 01c0 0A00A0E1 		mov	r0, r10
+ 371 01c4 0810A0E1 		mov	r1, r8
+ 372 01c8 FEFFFFEB 		bl	__aeabi_uidivmod
+ 373              	.LVL39:
+ 374 01cc 0120DBE7 		ldrb	r2, [fp, r1]	@ zero_extendqisi2
+ 329:consol.c      ****     }
+ 375              		.loc 1 329 0
+ 376 01d0 0A00A0E1 		mov	r0, r10
+ 377 01d4 0810A0E1 		mov	r1, r8
+ 328:consol.c      ****       numberAbs /= base;
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 14
+
+
+ 378              		.loc 1 328 0
+ 379 01d8 0020C9E5 		strb	r2, [r9]
+ 329:consol.c      ****     }
+ 380              		.loc 1 329 0
+ 381 01dc FEFFFFEB 		bl	__aeabi_uidiv
+ 382              	.LVL40:
+ 383 01e0 00A0A0E1 		mov	r10, r0
+ 384              	.LVL41:
+ 385              	.L34:
+ 386 01e4 019049E2 		sub	r9, r9, #1
+ 387 01e8 ECFFFFEA 		b	.L32
+ 388              	.LVL42:
+ 389              	.L44:
+ 390 01ec 26008DE2 		add	r0, sp, #38
+ 391              	.LVL43:
+ 334:consol.c      ****   }
+ 335:consol.c      **** 
+ 336:consol.c      ****   // apply signed notation if requested
+ 337:consol.c      ****   if(sign)
+ 392              		.loc 1 337 0
+ 393 01f0 000057E3 		cmp	r7, #0
+ 394 01f4 000064E0 		rsb	r0, r4, r0
+ 395 01f8 0700000A 		beq	.L36
+ 338:consol.c      ****   {
+ 339:consol.c      ****     if(number < 0)
+ 396              		.loc 1 339 0
+ 397 01fc 000056E3 		cmp	r6, #0
+ 398 0200 013040E2 		sub	r3, r0, #1
+ 340:consol.c      ****       *--pBuf = '-';
+ 399              		.loc 1 340 0
+ 400 0204 2D20A0B3 		movlt	r2, #45
+ 339:consol.c      ****       *--pBuf = '-';
+ 401              		.loc 1 339 0
+ 402 0208 010000BA 		blt	.L43
+ 403              	.LVL44:
+ 341:consol.c      ****     else if(number > 0)
+ 342:consol.c      ****        *--pBuf = '+';
+ 404              		.loc 1 342 0
+ 405 020c 2B20A013 		movne	r2, #43
+ 343:consol.c      ****     else
+ 344:consol.c      ****        *--pBuf = ' ';
+ 406              		.loc 1 344 0
+ 407 0210 2020A003 		moveq	r2, #32
+ 408              	.LVL45:
+ 409              	.L43:
+ 410 0214 012040E5 		strb	r2, [r0, #-1]
+ 411 0218 0300A0E1 		mov	r0, r3
+ 412              	.L36:
+ 413              	.LVL46:
+ 345:consol.c      ****   }
+ 346:consol.c      **** 
+ 347:consol.c      ****   // print the string right-justified
+ 348:consol.c      ****   consolSendString(pBuf);
+ 414              		.loc 1 348 0
+ 415 021c FEFFFFEB 		bl	consolSendString
+ 416              	.LVL47:
+ 349:consol.c      **** }
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 15
+
+
+ 417              		.loc 1 349 0
+ 418 0220 2CD08DE2 		add	sp, sp, #44
+ 419              	.LCFI10:
+ 420              		.cfi_def_cfa_offset 36
+ 421              		@ sp needed
+ 422 0224 F04FBDE8 		ldmfd	sp!, {r4, r5, r6, r7, r8, r9, r10, fp, lr}
+ 423              	.LCFI11:
+ 424              		.cfi_restore 14
+ 425              		.cfi_restore 11
+ 426              		.cfi_restore 10
+ 427              		.cfi_restore 9
+ 428              		.cfi_restore 8
+ 429              		.cfi_restore 7
+ 430              		.cfi_restore 6
+ 431              		.cfi_restore 5
+ 432              		.cfi_restore 4
+ 433              		.cfi_def_cfa_offset 0
+ 434              	.LVL48:
+ 435 0228 1EFF2FE1 		bx	lr
+ 436              	.L46:
+ 437              		.align	2
+ 438              	.L45:
+ 439 022c 00000000 		.word	.LANCHOR0
+ 440              		.cfi_endproc
+ 441              	.LFE6:
+ 442              		.size	consolSendNumber, .-consolSendNumber
+ 443              		.align	2
+ 444              		.global	simplePrintf
+ 445              		.type	simplePrintf, %function
+ 446              	simplePrintf:
+ 447              	.LFB7:
+ 350:consol.c      **** 
+ 351:consol.c      **** #if (CONSOLE_API_PRINTF == 1)  //OWN_PRINTF
+ 352:consol.c      **** /*****************************************************************************
+ 353:consol.c      ****  *
+ 354:consol.c      ****  * Description:
+ 355:consol.c      ****  *    Simple implementation of printf 
+ 356:consol.c      ****  *
+ 357:consol.c      ****  * Params:
+ 358:consol.c      ****  *    [in] fmt - Format string that specifies what to be printed 
+ 359:consol.c      ****  *    [in] ... - Variable number of parameters to match format string 
+ 360:consol.c      ****  *
+ 361:consol.c      ****  ****************************************************************************/
+ 362:consol.c      **** void
+ 363:consol.c      **** simplePrintf(const char * fmt,
+ 364:consol.c      ****              ...          )
+ 365:consol.c      **** {
+ 448              		.loc 1 365 0
+ 449              		.cfi_startproc
+ 450              		@ Function supports interworking.
+ 451              		@ args = 4, pretend = 16, frame = 8
+ 452              		@ frame_needed = 0, uses_anonymous_args = 1
+ 453              	.LVL49:
+ 454 0230 0F002DE9 		stmfd	sp!, {r0, r1, r2, r3}
+ 455              	.LCFI12:
+ 456              		.cfi_def_cfa_offset 16
+ 457              		.cfi_offset 0, -16
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 16
+
+
+ 458              		.cfi_offset 1, -12
+ 459              		.cfi_offset 2, -8
+ 460              		.cfi_offset 3, -4
+ 461 0234 73402DE9 		stmfd	sp!, {r0, r1, r4, r5, r6, lr}
+ 462              	.LCFI13:
+ 463              		.cfi_def_cfa_offset 40
+ 464              		.cfi_offset 4, -32
+ 465              		.cfi_offset 5, -28
+ 466              		.cfi_offset 6, -24
+ 467              		.cfi_offset 14, -20
+ 366:consol.c      **** 	va_list ap;
+ 367:consol.c      **** 
+ 368:consol.c      **** 	va_start(ap, fmt);
+ 468              		.loc 1 368 0
+ 469 0238 1C408DE2 		add	r4, sp, #28
+ 365:consol.c      **** 	va_list ap;
+ 470              		.loc 1 365 0
+ 471 023c 18609DE5 		ldr	r6, [sp, #24]
+ 472              		.loc 1 368 0
+ 473 0240 04408DE5 		str	r4, [sp, #4]
+ 474              	.LVL50:
+ 475              	.L49:
+ 476              	.LBB12:
+ 477              	.LBB13:
+ 104:consol.c      ****     {
+ 478              		.loc 1 104 0
+ 479 0244 0100D6E4 		ldrb	r0, [r6], #1	@ zero_extendqisi2
+ 480              	.LVL51:
+ 481 0248 250050E3 		cmp	r0, #37
+ 482 024c 0030A003 		moveq	r3, #0
+ 483 0250 0C00000A 		beq	.L52
+ 106:consol.c      ****         	return;
+ 484              		.loc 1 106 0
+ 485 0254 000050E3 		cmp	r0, #0
+ 486 0258 4900000A 		beq	.L47
+ 108:consol.c      ****     }
+ 487              		.loc 1 108 0
+ 488 025c FEFFFFEB 		bl	consolSendCh
+ 489              	.LVL52:
+ 490 0260 F7FFFFEA 		b	.L49
+ 491              	.LVL53:
+ 492              	.L88:
+ 114:consol.c      ****     {
+ 493              		.loc 1 114 0
+ 494 0264 0E00008A 		bhi	.L55
+ 495 0268 630051E3 		cmp	r1, #99
+ 496 026c 1B00000A 		beq	.L56
+ 497 0270 0800009A 		bls	.L87
+ 498 0274 640051E3 		cmp	r1, #100
+ 499 0278 2500000A 		beq	.L58
+ 500 027c 6C0051E3 		cmp	r1, #108
+ 501 0280 3800001A 		bne	.L53
+ 120:consol.c      ****       goto reswitch;
+ 502              		.loc 1 120 0
+ 503 0284 0130A0E3 		mov	r3, #1
+ 504              	.LVL54:
+ 505              	.L52:
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 17
+
+
+ 114:consol.c      ****     {
+ 506              		.loc 1 114 0
+ 507 0288 0110D6E4 		ldrb	r1, [r6], #1	@ zero_extendqisi2
+ 508              	.LVL55:
+ 509 028c 6F0051E3 		cmp	r1, #111
+ 510 0290 F3FFFF1A 		bne	.L88
+ 511 0294 280000EA 		b	.L54
+ 512              	.L87:
+ 513 0298 000051E3 		cmp	r1, #0
+ 514 029c 3800000A 		beq	.L47
+ 515 02a0 300000EA 		b	.L53
+ 516              	.L55:
+ 517 02a4 730051E3 		cmp	r1, #115
+ 518 02a8 1200000A 		beq	.L59
+ 519 02ac 0600008A 		bhi	.L60
+ 520 02b0 700051E3 		cmp	r1, #112
+ 521 02b4 2B00001A 		bne	.L53
+ 522              	.LVL56:
+ 523              	.LBB14:
+ 524              	.LBB15:
+ 258:consol.c      **** }
+ 525              		.loc 1 258 0
+ 526 02b8 3000A0E3 		mov	r0, #48
+ 527 02bc FEFFFFEB 		bl	consolSendChar
+ 528              	.LVL57:
+ 529              	.LBE15:
+ 530              	.LBE14:
+ 531              	.LBB16:
+ 532              	.LBB17:
+ 533 02c0 7800A0E3 		mov	r0, #120
+ 534 02c4 FEFFFFEB 		bl	consolSendChar
+ 535              	.LVL58:
+ 536 02c8 210000EA 		b	.L63
+ 537              	.LVL59:
+ 538              	.L60:
+ 539              	.LBE17:
+ 540              	.LBE16:
+ 114:consol.c      ****     {
+ 541              		.loc 1 114 0
+ 542 02cc 750051E3 		cmp	r1, #117
+ 543 02d0 1C00000A 		beq	.L62
+ 544 02d4 780051E3 		cmp	r1, #120
+ 545 02d8 1D00000A 		beq	.L63
+ 546 02dc 210000EA 		b	.L53
+ 547              	.L56:
+ 125:consol.c      **** 	    break;
+ 548              		.loc 1 125 0
+ 549 02e0 000094E5 		ldr	r0, [r4]
+ 550 02e4 7F0000E2 		and	r0, r0, #127
+ 124:consol.c      **** 	    outputFnk(ch & 0x7f);
+ 551              		.loc 1 124 0
+ 552 02e8 045084E2 		add	r5, r4, #4
+ 553              	.LVL60:
+ 125:consol.c      **** 	    break;
+ 554              		.loc 1 125 0
+ 555 02ec FEFFFFEB 		bl	consolSendCh
+ 556              	.LVL61:
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 18
+
+
+ 557              	.L64:
+ 178:consol.c      ****     }
+ 558              		.loc 1 178 0
+ 559 02f0 0540A0E1 		mov	r4, r5
+ 560              	.LVL62:
+ 561 02f4 D2FFFFEA 		b	.L49
+ 562              	.LVL63:
+ 563              	.L59:
+ 129:consol.c      ****       while ((ch = *p++) != 0)
+ 564              		.loc 1 129 0
+ 565 02f8 045084E2 		add	r5, r4, #4
+ 566              	.LVL64:
+ 567 02fc 004094E5 		ldr	r4, [r4]
+ 568              	.LVL65:
+ 569              	.L65:
+ 130:consol.c      **** 	    {
+ 570              		.loc 1 130 0
+ 571 0300 0100D4E4 		ldrb	r0, [r4], #1	@ zero_extendqisi2
+ 572              	.LVL66:
+ 573 0304 000050E3 		cmp	r0, #0
+ 574 0308 F8FFFF0A 		beq	.L64
+ 132:consol.c      **** 		}
+ 575              		.loc 1 132 0
+ 576 030c FEFFFFEB 		bl	consolSendCh
+ 577              	.LVL67:
+ 578 0310 FAFFFFEA 		b	.L65
+ 579              	.LVL68:
+ 580              	.L58:
+ 581 0314 045084E2 		add	r5, r4, #4
+ 139:consol.c      ****         }
+ 582              		.loc 1 139 0
+ 583 0318 004094E5 		ldr	r4, [r4]
+ 584              	.LVL69:
+ 145:consol.c      ****       {
+ 585              		.loc 1 145 0
+ 586 031c 000054E3 		cmp	r4, #0
+ 587 0320 020000AA 		bge	.L69
+ 588              	.LVL70:
+ 589              	.LBB18:
+ 590              	.LBB19:
+ 258:consol.c      **** }
+ 591              		.loc 1 258 0
+ 592 0324 2D00A0E3 		mov	r0, #45
+ 593 0328 FEFFFFEB 		bl	consolSendChar
+ 594              	.LVL71:
+ 595              	.LBE19:
+ 596              	.LBE18:
+ 148:consol.c      ****       }
+ 597              		.loc 1 148 0
+ 598 032c 004064E2 		rsb	r4, r4, #0
+ 599              	.LVL72:
+ 600              	.L69:
+ 150:consol.c      ****       break;
+ 601              		.loc 1 150 0
+ 602 0330 0A10A0E3 		mov	r1, #10
+ 603 0334 0400A0E1 		mov	r0, r4
+ 604 0338 080000EA 		b	.L85
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 19
+
+
+ 605              	.LVL73:
+ 606              	.L54:
+ 154:consol.c      ****       printNum(outputFnk, ul, 8);
+ 607              		.loc 1 154 0
+ 608 033c 045084E2 		add	r5, r4, #4
+ 609              	.LVL74:
+ 155:consol.c      ****       break;
+ 610              		.loc 1 155 0
+ 611 0340 0810A0E3 		mov	r1, #8
+ 612              	.LVL75:
+ 613 0344 040000EA 		b	.L86
+ 614              	.LVL76:
+ 615              	.L62:
+ 159:consol.c      ****       printNum(outputFnk, ul, 10);
+ 616              		.loc 1 159 0
+ 617 0348 045084E2 		add	r5, r4, #4
+ 618              	.LVL77:
+ 160:consol.c      ****       break;
+ 619              		.loc 1 160 0
+ 620 034c 0A10A0E3 		mov	r1, #10
+ 621              	.LVL78:
+ 622 0350 010000EA 		b	.L86
+ 623              	.LVL79:
+ 624              	.L63:
+ 171:consol.c      ****       break;
+ 625              		.loc 1 171 0
+ 626 0354 1010A0E3 		mov	r1, #16
+ 170:consol.c      ****       printNum(outputFnk, ul, 16);
+ 627              		.loc 1 170 0
+ 628 0358 045084E2 		add	r5, r4, #4
+ 629              	.LVL80:
+ 630              	.L86:
+ 171:consol.c      ****       break;
+ 631              		.loc 1 171 0
+ 632 035c 000094E5 		ldr	r0, [r4]
+ 633              	.LVL81:
+ 634              	.L85:
+ 635 0360 4BFFFFEB 		bl	printNum.constprop.1
+ 636              	.LVL82:
+ 637 0364 E1FFFFEA 		b	.L64
+ 638              	.LVL83:
+ 639              	.L53:
+ 176:consol.c      ****         outputFnk('l');
+ 640              		.loc 1 176 0
+ 641 0368 000053E3 		cmp	r3, #0
+ 642              	.LVL84:
+ 643              	.LBB20:
+ 644              	.LBB21:
+ 258:consol.c      **** }
+ 645              		.loc 1 258 0
+ 646 036c 6C00A013 		movne	r0, #108
+ 647 0370 FEFFFF1B 		blne	consolSendChar
+ 648              	.LVL85:
+ 649              	.L70:
+ 650              	.LBE21:
+ 651              	.LBE20:
+ 178:consol.c      ****     }
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 20
+
+
+ 652              		.loc 1 178 0
+ 653 0374 0100A0E1 		mov	r0, r1
+ 654 0378 FEFFFFEB 		bl	consolSendCh
+ 655              	.LVL86:
+ 656 037c 0450A0E1 		mov	r5, r4
+ 657 0380 DAFFFFEA 		b	.L64
+ 658              	.LVL87:
+ 659              	.L47:
+ 660              	.LBE13:
+ 661              	.LBE12:
+ 369:consol.c      **** 	simplePrint(consolSendCh, fmt, ap);
+ 370:consol.c      **** 	va_end(ap);
+ 371:consol.c      **** }
+ 662              		.loc 1 371 0
+ 663 0384 08D08DE2 		add	sp, sp, #8
+ 664              	.LCFI14:
+ 665              		.cfi_def_cfa_offset 32
+ 666              		@ sp needed
+ 667 0388 7040BDE8 		ldmfd	sp!, {r4, r5, r6, lr}
+ 668              	.LCFI15:
+ 669              		.cfi_restore 14
+ 670              		.cfi_restore 6
+ 671              		.cfi_restore 5
+ 672              		.cfi_restore 4
+ 673              		.cfi_def_cfa_offset 16
+ 674 038c 10D08DE2 		add	sp, sp, #16
+ 675              	.LCFI16:
+ 676              		.cfi_restore 3
+ 677              		.cfi_restore 2
+ 678              		.cfi_restore 1
+ 679              		.cfi_restore 0
+ 680              		.cfi_def_cfa_offset 0
+ 681 0390 1EFF2FE1 		bx	lr
+ 682              		.cfi_endproc
+ 683              	.LFE7:
+ 684              		.size	simplePrintf, .-simplePrintf
+ 685              		.align	2
+ 686              		.global	consolGetCh
+ 687              		.type	consolGetCh, %function
+ 688              	consolGetCh:
+ 689              	.LFB8:
+ 372:consol.c      **** #endif
+ 373:consol.c      **** 
+ 374:consol.c      **** 
+ 375:consol.c      **** #if (CONSOLE_API_SCANF == 1)  //SIMPLE
+ 376:consol.c      **** 
+ 377:consol.c      **** /*****************************************************************************
+ 378:consol.c      ****  *
+ 379:consol.c      ****  * Description:
+ 380:consol.c      ****  *    Wait (blocking call) for a character to be received. 
+ 381:consol.c      ****  *
+ 382:consol.c      ****  * Returns:
+ 383:consol.c      ****  *    char - Received character
+ 384:consol.c      ****  *
+ 385:consol.c      ****  ****************************************************************************/
+ 386:consol.c      **** char
+ 387:consol.c      **** consolGetCh(void)
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 21
+
+
+ 388:consol.c      **** {
+ 690              		.loc 1 388 0
+ 691              		.cfi_startproc
+ 692              		@ Function supports interworking.
+ 693              		@ args = 0, pretend = 0, frame = 0
+ 694              		@ frame_needed = 0, uses_anonymous_args = 0
+ 695              		@ link register save eliminated.
+ 389:consol.c      ****   while(!(UART_LSR & (0x01<<0)))
+ 696              		.loc 1 389 0
+ 697 0394 18209FE5 		ldr	r2, .L93
+ 698              	.L90:
+ 699              		.loc 1 389 0 is_stmt 0 discriminator 1
+ 700 0398 143092E5 		ldr	r3, [r2, #20]
+ 701 039c 010013E3 		tst	r3, #1
+ 702 03a0 FCFFFF0A 		beq	.L90
+ 390:consol.c      ****     ;
+ 391:consol.c      ****   return UART_RBR;
+ 703              		.loc 1 391 0 is_stmt 1
+ 704 03a4 08309FE5 		ldr	r3, .L93
+ 705 03a8 000093E5 		ldr	r0, [r3]
+ 706 03ac FF0000E2 		and	r0, r0, #255
+ 392:consol.c      **** }
+ 707              		.loc 1 392 0
+ 708 03b0 1EFF2FE1 		bx	lr
+ 709              	.L94:
+ 710              		.align	2
+ 711              	.L93:
+ 712 03b4 00C000E0 		.word	-536821760
+ 713              		.cfi_endproc
+ 714              	.LFE8:
+ 715              		.size	consolGetCh, .-consolGetCh
+ 716              		.align	2
+ 717              		.global	consolGetChar
+ 718              		.type	consolGetChar, %function
+ 719              	consolGetChar:
+ 720              	.LFB9:
+ 393:consol.c      **** 
+ 394:consol.c      **** /*****************************************************************************
+ 395:consol.c      ****  *
+ 396:consol.c      ****  * Description:
+ 397:consol.c      ****  *    Check (non-blocking call) if a character has been received. 
+ 398:consol.c      ****  *
+ 399:consol.c      ****  * Params:
+ 400:consol.c      ****  *    [inout] pChar - pointer to where to place received character
+ 401:consol.c      ****  *
+ 402:consol.c      ****  * Returns:
+ 403:consol.c      ****  *    char - TRUE if character has been received (placed at pointed location)
+ 404:consol.c      ****  *           FALSE if no character has been received.
+ 405:consol.c      ****  *
+ 406:consol.c      ****  ****************************************************************************/
+ 407:consol.c      **** char
+ 408:consol.c      **** consolGetChar(char *pChar)
+ 409:consol.c      **** {
+ 721              		.loc 1 409 0
+ 722              		.cfi_startproc
+ 723              		@ Function supports interworking.
+ 724              		@ args = 0, pretend = 0, frame = 0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 22
+
+
+ 725              		@ frame_needed = 0, uses_anonymous_args = 0
+ 726              		@ link register save eliminated.
+ 727              	.LVL88:
+ 410:consol.c      ****   if((UART_LSR & 0x01) != 0x00)
+ 728              		.loc 1 410 0
+ 729 03b8 18209FE5 		ldr	r2, .L98
+ 730 03bc 143092E5 		ldr	r3, [r2, #20]
+ 731 03c0 013013E2 		ands	r3, r3, #1
+ 411:consol.c      ****   {
+ 412:consol.c      ****     *pChar = UART_RBR;
+ 732              		.loc 1 412 0
+ 733 03c4 00309215 		ldrne	r3, [r2]
+ 734 03c8 0030C015 		strneb	r3, [r0]
+ 413:consol.c      ****     return 1;
+ 735              		.loc 1 413 0
+ 736 03cc 0100A013 		movne	r0, #1
+ 737              	.LVL89:
+ 414:consol.c      ****   }
+ 415:consol.c      ****   return 0;
+ 738              		.loc 1 415 0
+ 739 03d0 0300A001 		moveq	r0, r3
+ 416:consol.c      **** }
+ 740              		.loc 1 416 0
+ 741 03d4 1EFF2FE1 		bx	lr
+ 742              	.L99:
+ 743              		.align	2
+ 744              	.L98:
+ 745 03d8 00C000E0 		.word	-536821760
+ 746              		.cfi_endproc
+ 747              	.LFE9:
+ 748              		.size	consolGetChar, .-consolGetChar
+ 749              		.align	2
+ 750              		.global	consolGetString
+ 751              		.type	consolGetString, %function
+ 752              	consolGetString:
+ 753              	.LFB10:
+ 417:consol.c      **** 
+ 418:consol.c      **** /*****************************************************************************
+ 419:consol.c      ****  *
+ 420:consol.c      ****  * Description:
+ 421:consol.c      ****  *    Receive (blocking call) a string (end with '\r'). 
+ 422:consol.c      ****  *
+ 423:consol.c      ****  * Params:
+ 424:consol.c      ****  *    [inout] pString - pointer to return the received string
+ 425:consol.c      ****  *
+ 426:consol.c      ****  ****************************************************************************/
+ 427:consol.c      **** void
+ 428:consol.c      **** consolGetString(char *pString)
+ 429:consol.c      **** {
+ 754              		.loc 1 429 0
+ 755              		.cfi_startproc
+ 756              		@ Function supports interworking.
+ 757              		@ args = 0, pretend = 0, frame = 0
+ 758              		@ frame_needed = 0, uses_anonymous_args = 0
+ 759              	.LVL90:
+ 760 03dc 70402DE9 		stmfd	sp!, {r4, r5, r6, lr}
+ 761              	.LCFI17:
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 23
+
+
+ 762              		.cfi_def_cfa_offset 16
+ 763              		.cfi_offset 4, -16
+ 764              		.cfi_offset 5, -12
+ 765              		.cfi_offset 6, -8
+ 766              		.cfi_offset 14, -4
+ 767              		.loc 1 429 0
+ 768 03e0 0050A0E1 		mov	r5, r0
+ 430:consol.c      ****   char *pString2;
+ 431:consol.c      ****   char rxChar;
+ 432:consol.c      **** 
+ 433:consol.c      ****   pString2 = pString;
+ 434:consol.c      ****   while((rxChar = consolGetCh()) != '\r')
+ 769              		.loc 1 434 0
+ 770 03e4 0040A0E1 		mov	r4, r0
+ 771              	.LVL91:
+ 772              	.L101:
+ 773 03e8 FEFFFFEB 		bl	consolGetCh
+ 774              	.LVL92:
+ 775 03ec 0D0050E3 		cmp	r0, #13
+ 776 03f0 0030A0E1 		mov	r3, r0
+ 777              	.LVL93:
+ 778 03f4 0C00000A 		beq	.L106
+ 435:consol.c      ****   {
+ 436:consol.c      ****     if (rxChar == '\b')
+ 779              		.loc 1 436 0
+ 780 03f8 080053E3 		cmp	r3, #8
+ 781 03fc 0500001A 		bne	.L102
+ 437:consol.c      ****     {
+ 438:consol.c      ****       if ((int)pString2 < (int)pString)
+ 782              		.loc 1 438 0
+ 783 0400 040055E1 		cmp	r5, r4
+ 784 0404 F7FFFFAA 		bge	.L101
+ 439:consol.c      ****       {
+ 440:consol.c      ****         consolSendString("\b \b");
+ 785              		.loc 1 440 0
+ 786 0408 30009FE5 		ldr	r0, .L107
+ 787              	.LVL94:
+ 788 040c FEFFFFEB 		bl	consolSendString
+ 789              	.LVL95:
+ 441:consol.c      ****         pString--;
+ 790              		.loc 1 441 0
+ 791 0410 014044E2 		sub	r4, r4, #1
+ 792              	.LVL96:
+ 793 0414 F3FFFFEA 		b	.L101
+ 794              	.LVL97:
+ 795              	.L102:
+ 442:consol.c      ****       }
+ 443:consol.c      ****     }
+ 444:consol.c      ****     else
+ 445:consol.c      ****     {
+ 446:consol.c      ****       *pString++ = rxChar;
+ 796              		.loc 1 446 0
+ 797 0418 0030C4E5 		strb	r3, [r4]
+ 798 041c 016084E2 		add	r6, r4, #1
+ 799              	.LVL98:
+ 447:consol.c      ****       consolSendCh(rxChar);
+ 800              		.loc 1 447 0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 24
+
+
+ 801 0420 FEFFFFEB 		bl	consolSendCh
+ 802              	.LVL99:
+ 446:consol.c      ****       consolSendCh(rxChar);
+ 803              		.loc 1 446 0
+ 804 0424 0640A0E1 		mov	r4, r6
+ 805 0428 EEFFFFEA 		b	.L101
+ 806              	.LVL100:
+ 807              	.L106:
+ 448:consol.c      ****     }
+ 449:consol.c      ****   }
+ 450:consol.c      ****   *pString = '\0';
+ 808              		.loc 1 450 0
+ 809 042c 0030A0E3 		mov	r3, #0
+ 810 0430 0030C4E5 		strb	r3, [r4]
+ 451:consol.c      ****   consolSendCh('\n');
+ 811              		.loc 1 451 0
+ 812 0434 0A00A0E3 		mov	r0, #10
+ 813              	.LVL101:
+ 452:consol.c      **** }
+ 814              		.loc 1 452 0
+ 815 0438 7040BDE8 		ldmfd	sp!, {r4, r5, r6, lr}
+ 816              	.LCFI18:
+ 817              		.cfi_restore 14
+ 818              		.cfi_restore 6
+ 819              		.cfi_restore 5
+ 820              		.cfi_restore 4
+ 821              		.cfi_def_cfa_offset 0
+ 822              	.LVL102:
+ 451:consol.c      ****   consolSendCh('\n');
+ 823              		.loc 1 451 0
+ 824 043c FEFFFFEA 		b	consolSendCh
+ 825              	.LVL103:
+ 826              	.L108:
+ 827              		.align	2
+ 828              	.L107:
+ 829 0440 11000000 		.word	.LC1
+ 830              		.cfi_endproc
+ 831              	.LFE10:
+ 832              		.size	consolGetString, .-consolGetString
+ 833              		.align	2
+ 834              		.global	consolGetIntNum
+ 835              		.type	consolGetIntNum, %function
+ 836              	consolGetIntNum:
+ 837              	.LFB11:
+ 453:consol.c      **** 
+ 454:consol.c      **** /*****************************************************************************
+ 455:consol.c      ****  *
+ 456:consol.c      ****  * Description:
+ 457:consol.c      ****  *    Receive (blocking call) a number (end with '\r').
+ 458:consol.c      ****  *    Accepts hexadecimal (radix 16) and integer (radix 10) numbers.
+ 459:consol.c      ****  *
+ 460:consol.c      ****  * Returns:
+ 461:consol.c      ****  *    int - the received number
+ 462:consol.c      ****  *
+ 463:consol.c      ****  ****************************************************************************/
+ 464:consol.c      **** int
+ 465:consol.c      **** consolGetIntNum(void)
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 25
+
+
+ 466:consol.c      **** {
+ 838              		.loc 1 466 0
+ 839              		.cfi_startproc
+ 840              		@ Function supports interworking.
+ 841              		@ args = 0, pretend = 0, frame = 32
+ 842              		@ frame_needed = 0, uses_anonymous_args = 0
+ 843 0444 70402DE9 		stmfd	sp!, {r4, r5, r6, lr}
+ 844              	.LCFI19:
+ 845              		.cfi_def_cfa_offset 16
+ 846              		.cfi_offset 4, -16
+ 847              		.cfi_offset 5, -12
+ 848              		.cfi_offset 6, -8
+ 849              		.cfi_offset 14, -4
+ 850 0448 20D04DE2 		sub	sp, sp, #32
+ 851              	.LCFI20:
+ 852              		.cfi_def_cfa_offset 48
+ 853              	.LVL104:
+ 467:consol.c      ****   char  abStr[30];
+ 468:consol.c      ****   char *pString = abStr;
+ 469:consol.c      ****   int   wBase=10;
+ 470:consol.c      ****   int   wMinus=0;
+ 471:consol.c      ****   int   wLastIndex;
+ 472:consol.c      ****   int   wResult=0;
+ 473:consol.c      ****   int   wI;
+ 474:consol.c      ****         
+ 475:consol.c      ****   consolGetString(pString);
+ 854              		.loc 1 475 0
+ 855 044c 0D00A0E1 		mov	r0, sp
+ 856 0450 FEFFFFEB 		bl	consolGetString
+ 857              	.LVL105:
+ 476:consol.c      ****         
+ 477:consol.c      ****   if(pString[0] == '-')
+ 858              		.loc 1 477 0
+ 859 0454 0030DDE5 		ldrb	r3, [sp]	@ zero_extendqisi2
+ 860 0458 2D0053E3 		cmp	r3, #45
+ 861              	.LVL106:
+ 478:consol.c      ****   {
+ 479:consol.c      ****     wMinus = 1;
+ 862              		.loc 1 479 0
+ 863 045c 0150A003 		moveq	r5, #1
+ 480:consol.c      ****     pString++;
+ 864              		.loc 1 480 0
+ 865 0460 0130DD05 		ldreqb	r3, [sp, #1]	@ zero_extendqisi2
+ 866 0464 05408D00 		addeq	r4, sp, r5
+ 470:consol.c      ****   int   wLastIndex;
+ 867              		.loc 1 470 0
+ 868 0468 0050A013 		movne	r5, #0
+ 468:consol.c      ****   int   wBase=10;
+ 869              		.loc 1 468 0
+ 870 046c 0D40A011 		movne	r4, sp
+ 871              	.LVL107:
+ 481:consol.c      ****   }
+ 482:consol.c      **** 
+ 483:consol.c      ****   if(pString[0] == '0' && (pString[1] == 'x' || pString[1] == 'X'))
+ 872              		.loc 1 483 0
+ 873 0470 300053E3 		cmp	r3, #48
+ 874 0474 0500001A 		bne	.L123
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 26
+
+
+ 875              		.loc 1 483 0 is_stmt 0 discriminator 1
+ 876 0478 0130D4E5 		ldrb	r3, [r4, #1]	@ zero_extendqisi2
+ 877 047c DF3003E2 		and	r3, r3, #223
+ 878 0480 580053E3 		cmp	r3, #88
+ 484:consol.c      ****   {
+ 485:consol.c      ****     wBase = 16;
+ 486:consol.c      ****     pString += 2;
+ 879              		.loc 1 486 0 is_stmt 1 discriminator 1
+ 880 0484 02408402 		addeq	r4, r4, #2
+ 485:consol.c      ****     pString += 2;
+ 881              		.loc 1 485 0 discriminator 1
+ 882 0488 1060A003 		moveq	r6, #16
+ 483:consol.c      ****   {
+ 883              		.loc 1 483 0 discriminator 1
+ 884 048c 0000000A 		beq	.L111
+ 885              	.L123:
+ 469:consol.c      ****   int   wMinus=0;
+ 886              		.loc 1 469 0
+ 887 0490 0A60A0E3 		mov	r6, #10
+ 888              	.L111:
+ 889              	.LVL108:
+ 487:consol.c      ****   }
+ 488:consol.c      **** 
+ 489:consol.c      ****   wLastIndex = strlen(pString) - 1;
+ 890              		.loc 1 489 0
+ 891 0494 0400A0E1 		mov	r0, r4
+ 892 0498 FEFFFFEB 		bl	strlen
+ 893              	.LVL109:
+ 894 049c 013040E2 		sub	r3, r0, #1
+ 895              	.LVL110:
+ 490:consol.c      ****   if(pString[wLastIndex] == 'h' || pString[wLastIndex] == 'H')
+ 896              		.loc 1 490 0
+ 897 04a0 0320D4E7 		ldrb	r2, [r4, r3]	@ zero_extendqisi2
+ 898 04a4 DF2002E2 		and	r2, r2, #223
+ 899 04a8 480052E3 		cmp	r2, #72
+ 900              	.LVL111:
+ 491:consol.c      ****   {
+ 492:consol.c      ****     wBase = 16;
+ 493:consol.c      ****     pString[wLastIndex] = 0;
+ 901              		.loc 1 493 0
+ 902 04ac 0020A003 		moveq	r2, #0
+ 903 04b0 0320C407 		streqb	r2, [r4, r3]
+ 904              	.LVL112:
+ 494:consol.c      ****     wLastIndex--;
+ 905              		.loc 1 494 0
+ 906 04b4 01304302 		subeq	r3, r3, #1
+ 907              	.LVL113:
+ 908 04b8 0100000A 		beq	.L113
+ 909              	.LVL114:
+ 910              	.L112:
+ 495:consol.c      ****   }
+ 496:consol.c      **** 
+ 497:consol.c      ****   if(wBase == 10)
+ 911              		.loc 1 497 0
+ 912 04bc 0A0056E3 		cmp	r6, #10
+ 913 04c0 0200000A 		beq	.L114
+ 914              	.LVL115:
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 27
+
+
+ 915              	.L113:
+ 485:consol.c      ****     pString += 2;
+ 916              		.loc 1 485 0 discriminator 1
+ 917 04c4 0410A0E1 		mov	r1, r4
+ 918 04c8 0000A0E3 		mov	r0, #0
+ 919 04cc 0B0000EA 		b	.L115
+ 920              	.LVL116:
+ 921              	.L114:
+ 498:consol.c      ****   {
+ 499:consol.c      ****     wResult = atoi(pString);
+ 922              		.loc 1 499 0
+ 923 04d0 0400A0E1 		mov	r0, r4
+ 924 04d4 FEFFFFEB 		bl	atoi
+ 925              	.LVL117:
+ 926 04d8 0B0000EA 		b	.L133
+ 927              	.LVL118:
+ 928              	.L120:
+ 500:consol.c      ****     wResult = wMinus ? (-1*wResult):wResult;
+ 501:consol.c      ****   }
+ 502:consol.c      ****   else
+ 503:consol.c      ****   {
+ 504:consol.c      ****     for(wI=0; wI<=wLastIndex; wI++)
+ 505:consol.c      ****     {
+ 506:consol.c      ****       if(__isalpha(pString[wI]))
+ 929              		.loc 1 506 0
+ 930 04dc 0120D1E4 		ldrb	r2, [r1], #1	@ zero_extendqisi2
+ 931              	.LVL119:
+ 932 04e0 0002A0E1 		mov	r0, r0, asl #4
+ 933              	.LVL120:
+ 934 04e4 390052E3 		cmp	r2, #57
+ 507:consol.c      ****       {
+ 508:consol.c      ****         if(__isupper(pString[wI]))
+ 509:consol.c      ****           wResult = (wResult<<4) + pString[wI] - 'A' + 10;
+ 935              		.loc 1 509 0
+ 936 04e8 020080E0 		add	r0, r0, r2
+ 510:consol.c      ****         else
+ 511:consol.c      ****           wResult = (wResult<<4) + pString[wI] - 'a' + 10;
+ 512:consol.c      ****       }
+ 513:consol.c      ****       else
+ 514:consol.c      ****       {
+ 515:consol.c      ****         wResult = (wResult<<4) + pString[wI] - '0';
+ 937              		.loc 1 515 0
+ 938 04ec 30004092 		subls	r0, r0, #48
+ 506:consol.c      ****       {
+ 939              		.loc 1 506 0
+ 940 04f0 0200009A 		bls	.L115
+ 508:consol.c      ****           wResult = (wResult<<4) + pString[wI] - 'A' + 10;
+ 941              		.loc 1 508 0
+ 942 04f4 200012E3 		tst	r2, #32
+ 509:consol.c      ****         else
+ 943              		.loc 1 509 0
+ 944 04f8 37004002 		subeq	r0, r0, #55
+ 945              	.LVL121:
+ 511:consol.c      ****       }
+ 946              		.loc 1 511 0
+ 947 04fc 57004012 		subne	r0, r0, #87
+ 948              	.LVL122:
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 28
+
+
+ 949              	.L115:
+ 504:consol.c      ****     {
+ 950              		.loc 1 504 0 discriminator 1
+ 951 0500 012064E0 		rsb	r2, r4, r1
+ 952 0504 030052E1 		cmp	r2, r3
+ 953 0508 F3FFFFDA 		ble	.L120
+ 954              	.LVL123:
+ 955              	.L133:
+ 516:consol.c      ****       }
+ 517:consol.c      ****     }
+ 518:consol.c      ****     wResult = wMinus ? (-1*wResult):wResult;
+ 956              		.loc 1 518 0
+ 957 050c 000055E3 		cmp	r5, #0
+ 958 0510 00006012 		rsbne	r0, r0, #0
+ 959              	.LVL124:
+ 519:consol.c      ****   }
+ 520:consol.c      ****   return wResult;
+ 521:consol.c      **** }
+ 960              		.loc 1 521 0
+ 961 0514 20D08DE2 		add	sp, sp, #32
+ 962              	.LCFI21:
+ 963              		.cfi_def_cfa_offset 16
+ 964              	.LVL125:
+ 965              		@ sp needed
+ 966 0518 7040BDE8 		ldmfd	sp!, {r4, r5, r6, lr}
+ 967              	.LCFI22:
+ 968              		.cfi_restore 14
+ 969              		.cfi_restore 6
+ 970              		.cfi_restore 5
+ 971              		.cfi_restore 4
+ 972              		.cfi_def_cfa_offset 0
+ 973              	.LVL126:
+ 974 051c 1EFF2FE1 		bx	lr
+ 975              		.cfi_endproc
+ 976              	.LFE11:
+ 977              		.size	consolGetIntNum, .-consolGetIntNum
+ 978              		.align	2
+ 979              		.global	consolScanf
+ 980              		.type	consolScanf, %function
+ 981              	consolScanf:
+ 982              	.LFB12:
+ 522:consol.c      **** 
+ 523:consol.c      **** /*****************************************************************************
+ 524:consol.c      ****  *
+ 525:consol.c      ****  * Description:
+ 526:consol.c      ****  *    A simple implementation of the scanf()-function. 
+ 527:consol.c      ****  *
+ 528:consol.c      ****  * Params:
+ 529:consol.c      ****  *    [inout] pFmt - format string, accepts:
+ 530:consol.c      ****  *                   %s - string
+ 531:consol.c      ****  *                   %c - character
+ 532:consol.c      ****  *                   %i - integer
+ 533:consol.c      ****  *
+ 534:consol.c      ****  ****************************************************************************/
+ 535:consol.c      **** void
+ 536:consol.c      **** consolScanf(char *pFmt, ...)
+ 537:consol.c      **** {
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 29
+
+
+ 983              		.loc 1 537 0
+ 984              		.cfi_startproc
+ 985              		@ Function supports interworking.
+ 986              		@ args = 4, pretend = 16, frame = 8
+ 987              		@ frame_needed = 0, uses_anonymous_args = 1
+ 988              	.LVL127:
+ 989 0520 0F002DE9 		stmfd	sp!, {r0, r1, r2, r3}
+ 990              	.LCFI23:
+ 991              		.cfi_def_cfa_offset 16
+ 992              		.cfi_offset 0, -16
+ 993              		.cfi_offset 1, -12
+ 994              		.cfi_offset 2, -8
+ 995              		.cfi_offset 3, -4
+ 996 0524 37402DE9 		stmfd	sp!, {r0, r1, r2, r4, r5, lr}
+ 997              	.LCFI24:
+ 998              		.cfi_def_cfa_offset 40
+ 999              		.cfi_offset 4, -28
+ 1000              		.cfi_offset 5, -24
+ 1001              		.cfi_offset 14, -20
+ 538:consol.c      ****   va_list pArg;
+ 539:consol.c      ****   char    character;
+ 540:consol.c      ****   int    *pInt;
+ 541:consol.c      ****   char   *pChar;
+ 542:consol.c      ****         
+ 543:consol.c      ****   va_start(pArg, pFmt);
+ 1002              		.loc 1 543 0
+ 1003 0528 1C308DE2 		add	r3, sp, #28
+ 537:consol.c      ****   va_list pArg;
+ 1004              		.loc 1 537 0
+ 1005 052c 18409DE5 		ldr	r4, [sp, #24]
+ 1006              		.loc 1 543 0
+ 1007 0530 04308DE5 		str	r3, [sp, #4]
+ 1008              	.LVL128:
+ 1009              	.L135:
+ 544:consol.c      ****   while((character = *pFmt++) != '\0')
+ 1010              		.loc 1 544 0
+ 1011 0534 0130D4E4 		ldrb	r3, [r4], #1	@ zero_extendqisi2
+ 1012              	.LVL129:
+ 1013 0538 000053E3 		cmp	r3, #0
+ 1014 053c 2500000A 		beq	.L161
+ 545:consol.c      ****   {
+ 546:consol.c      ****     if(character != '%')continue;
+ 1015              		.loc 1 546 0
+ 1016 0540 250053E3 		cmp	r3, #37
+ 1017 0544 FAFFFF1A 		bne	.L135
+ 547:consol.c      ****     switch(*pFmt)
+ 1018              		.loc 1 547 0
+ 1019 0548 0030D4E5 		ldrb	r3, [r4]	@ zero_extendqisi2
+ 1020              	.LVL130:
+ 1021 054c 530053E3 		cmp	r3, #83
+ 1022 0550 0C00000A 		beq	.L137
+ 1023 0554 0400008A 		bhi	.L138
+ 1024 0558 430053E3 		cmp	r3, #67
+ 1025 055c 1600000A 		beq	.L139
+ 1026 0560 490053E3 		cmp	r3, #73
+ 1027 0564 0D00000A 		beq	.L140
+ 1028 0568 F1FFFFEA 		b	.L135
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 30
+
+
+ 1029              	.L138:
+ 1030 056c 690053E3 		cmp	r3, #105
+ 1031 0570 0A00000A 		beq	.L140
+ 1032 0574 730053E3 		cmp	r3, #115
+ 1033 0578 0200000A 		beq	.L137
+ 1034 057c 630053E3 		cmp	r3, #99
+ 1035 0580 EBFFFF1A 		bne	.L135
+ 1036 0584 0C0000EA 		b	.L139
+ 1037              	.L137:
+ 548:consol.c      ****     {
+ 549:consol.c      ****     case 's':
+ 550:consol.c      ****     case 'S':
+ 551:consol.c      ****       pChar = va_arg (pArg, char *);
+ 1038              		.loc 1 551 0
+ 1039 0588 04309DE5 		ldr	r3, [sp, #4]
+ 1040 058c 042083E2 		add	r2, r3, #4
+ 552:consol.c      ****       consolGetString(pChar);
+ 1041              		.loc 1 552 0
+ 1042 0590 000093E5 		ldr	r0, [r3]
+ 551:consol.c      ****       consolGetString(pChar);
+ 1043              		.loc 1 551 0
+ 1044 0594 04208DE5 		str	r2, [sp, #4]
+ 1045              	.LVL131:
+ 1046              		.loc 1 552 0
+ 1047 0598 FEFFFFEB 		bl	consolGetString
+ 1048              	.LVL132:
+ 553:consol.c      ****       break;
+ 1049              		.loc 1 553 0
+ 1050 059c E4FFFFEA 		b	.L135
+ 1051              	.LVL133:
+ 1052              	.L140:
+ 554:consol.c      ****     case 'i':
+ 555:consol.c      ****     case 'I':
+ 556:consol.c      ****       pInt  = va_arg (pArg, int *);
+ 1053              		.loc 1 556 0
+ 1054 05a0 04309DE5 		ldr	r3, [sp, #4]
+ 1055 05a4 042083E2 		add	r2, r3, #4
+ 1056 05a8 005093E5 		ldr	r5, [r3]
+ 1057              	.LVL134:
+ 1058 05ac 04208DE5 		str	r2, [sp, #4]
+ 557:consol.c      ****       *pInt = consolGetIntNum();
+ 1059              		.loc 1 557 0
+ 1060 05b0 FEFFFFEB 		bl	consolGetIntNum
+ 1061              	.LVL135:
+ 1062 05b4 000085E5 		str	r0, [r5]
+ 558:consol.c      ****       break;
+ 1063              		.loc 1 558 0
+ 1064 05b8 DDFFFFEA 		b	.L135
+ 1065              	.LVL136:
+ 1066              	.L139:
+ 559:consol.c      ****     case 'c':
+ 560:consol.c      ****     case 'C':
+ 561:consol.c      ****       pChar  = va_arg (pArg, char *);
+ 1067              		.loc 1 561 0
+ 1068 05bc 04309DE5 		ldr	r3, [sp, #4]
+ 1069 05c0 042083E2 		add	r2, r3, #4
+ 1070 05c4 001093E5 		ldr	r1, [r3]
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 31
+
+
+ 1071              	.LVL137:
+ 1072 05c8 04208DE5 		str	r2, [sp, #4]
+ 562:consol.c      ****       *pChar = consolGetCh();
+ 1073              		.loc 1 562 0
+ 1074 05cc FEFFFFEB 		bl	consolGetCh
+ 1075              	.LVL138:
+ 1076 05d0 0000C1E5 		strb	r0, [r1]
+ 563:consol.c      ****       break;
+ 1077              		.loc 1 563 0
+ 1078 05d4 D6FFFFEA 		b	.L135
+ 1079              	.LVL139:
+ 1080              	.L161:
+ 564:consol.c      ****     }
+ 565:consol.c      ****   }
+ 566:consol.c      ****   va_end(pArg);
+ 567:consol.c      **** }
+ 1081              		.loc 1 567 0
+ 1082 05d8 0CD08DE2 		add	sp, sp, #12
+ 1083              	.LCFI25:
+ 1084              		.cfi_def_cfa_offset 28
+ 1085              		@ sp needed
+ 1086 05dc 3040BDE8 		ldmfd	sp!, {r4, r5, lr}
+ 1087              	.LCFI26:
+ 1088              		.cfi_restore 14
+ 1089              		.cfi_restore 5
+ 1090              		.cfi_restore 4
+ 1091              		.cfi_def_cfa_offset 16
+ 1092              	.LVL140:
+ 1093 05e0 10D08DE2 		add	sp, sp, #16
+ 1094              	.LCFI27:
+ 1095              		.cfi_restore 3
+ 1096              		.cfi_restore 2
+ 1097              		.cfi_restore 1
+ 1098              		.cfi_restore 0
+ 1099              		.cfi_def_cfa_offset 0
+ 1100 05e4 1EFF2FE1 		bx	lr
+ 1101              		.cfi_endproc
+ 1102              	.LFE12:
+ 1103              		.size	consolScanf, .-consolScanf
+ 1104              		.section	.rodata
+ 1105              		.set	.LANCHOR0,. + 0
+ 1106              		.type	hexChars.5043, %object
+ 1107              		.size	hexChars.5043, 16
+ 1108              	hexChars.5043:
+ 1109 0000 30313233 		.ascii	"0123456789ABCDEF"
+ 1109      34353637 
+ 1109      38394142 
+ 1109      43444546 
+ 1110              		.section	.rodata.str1.1,"aMS",%progbits,1
+ 1111              	.LC0:
+ 1112 0000 30313233 		.ascii	"0123456789abcdef\000"
+ 1112      34353637 
+ 1112      38396162 
+ 1112      63646566 
+ 1112      00
+ 1113              	.LC1:
+ 1114 0011 08200800 		.ascii	"\010 \010\000"
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 32
+
+
+ 1115              		.text
+ 1116              	.Letext0:
+ 1117              		.file 2 "c:\\embedded\\tools\\lib\\gcc\\arm-none-eabi\\5.4.1\\include\\stdarg.h"
+ 1118              		.file 3 "c:\\embedded\\tools\\arm-none-eabi\\include\\string.h"
+ 1119              		.file 4 "c:\\embedded\\tools\\arm-none-eabi\\include\\stdlib.h"
+ 1120              		.file 5 "<built-in>"
+ 1121              		.section	.debug_info,"",%progbits
+ 1122              	.Ldebug_info0:
+ 1123 0000 99070000 		.4byte	0x799
+ 1124 0004 0200     		.2byte	0x2
+ 1125 0006 00000000 		.4byte	.Ldebug_abbrev0
+ 1126 000a 04       		.byte	0x4
+ 1127 000b 01       		.uleb128 0x1
+ 1128 000c 09020000 		.4byte	.LASF50
+ 1129 0010 0C       		.byte	0xc
+ 1130 0011 7C010000 		.4byte	.LASF51
+ 1131 0015 CF010000 		.4byte	.LASF52
+ 1132 0019 00000000 		.4byte	.Ltext0
+ 1133 001d E8050000 		.4byte	.Letext0
+ 1134 0021 00000000 		.4byte	.Ldebug_line0
+ 1135 0025 02       		.uleb128 0x2
+ 1136 0026 04       		.byte	0x4
+ 1137 0027 05       		.byte	0x5
+ 1138 0028 696E7400 		.ascii	"int\000"
+ 1139 002c 03       		.uleb128 0x3
+ 1140 002d 04       		.byte	0x4
+ 1141 002e 07       		.byte	0x7
+ 1142 002f 0E010000 		.4byte	.LASF0
+ 1143 0033 03       		.uleb128 0x3
+ 1144 0034 08       		.byte	0x8
+ 1145 0035 05       		.byte	0x5
+ 1146 0036 9A000000 		.4byte	.LASF1
+ 1147 003a 03       		.uleb128 0x3
+ 1148 003b 08       		.byte	0x8
+ 1149 003c 04       		.byte	0x4
+ 1150 003d 9C010000 		.4byte	.LASF2
+ 1151 0041 03       		.uleb128 0x3
+ 1152 0042 01       		.byte	0x1
+ 1153 0043 06       		.byte	0x6
+ 1154 0044 A8000000 		.4byte	.LASF3
+ 1155 0048 03       		.uleb128 0x3
+ 1156 0049 01       		.byte	0x1
+ 1157 004a 08       		.byte	0x8
+ 1158 004b 8E020000 		.4byte	.LASF4
+ 1159 004f 03       		.uleb128 0x3
+ 1160 0050 02       		.byte	0x2
+ 1161 0051 05       		.byte	0x5
+ 1162 0052 A7020000 		.4byte	.LASF5
+ 1163 0056 03       		.uleb128 0x3
+ 1164 0057 02       		.byte	0x2
+ 1165 0058 07       		.byte	0x7
+ 1166 0059 58010000 		.4byte	.LASF6
+ 1167 005d 03       		.uleb128 0x3
+ 1168 005e 04       		.byte	0x4
+ 1169 005f 05       		.byte	0x5
+ 1170 0060 D4000000 		.4byte	.LASF7
+ 1171 0064 03       		.uleb128 0x3
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 33
+
+
+ 1172 0065 04       		.byte	0x4
+ 1173 0066 07       		.byte	0x7
+ 1174 0067 22010000 		.4byte	.LASF8
+ 1175 006b 03       		.uleb128 0x3
+ 1176 006c 08       		.byte	0x8
+ 1177 006d 07       		.byte	0x7
+ 1178 006e 52000000 		.4byte	.LASF9
+ 1179 0072 03       		.uleb128 0x3
+ 1180 0073 04       		.byte	0x4
+ 1181 0074 07       		.byte	0x7
+ 1182 0075 93010000 		.4byte	.LASF10
+ 1183 0079 04       		.uleb128 0x4
+ 1184 007a 04       		.byte	0x4
+ 1185 007b 05       		.uleb128 0x5
+ 1186 007c 04       		.byte	0x4
+ 1187 007d 81000000 		.4byte	0x81
+ 1188 0081 03       		.uleb128 0x3
+ 1189 0082 01       		.byte	0x1
+ 1190 0083 08       		.byte	0x8
+ 1191 0084 C1020000 		.4byte	.LASF11
+ 1192 0088 05       		.uleb128 0x5
+ 1193 0089 04       		.byte	0x4
+ 1194 008a 8E000000 		.4byte	0x8e
+ 1195 008e 06       		.uleb128 0x6
+ 1196 008f 81000000 		.4byte	0x81
+ 1197 0093 07       		.uleb128 0x7
+ 1198 0094 C0010000 		.4byte	.LASF12
+ 1199 0098 02       		.byte	0x2
+ 1200 0099 28       		.byte	0x28
+ 1201 009a 9E000000 		.4byte	0x9e
+ 1202 009e 08       		.uleb128 0x8
+ 1203 009f DD000000 		.4byte	.LASF53
+ 1204 00a3 04       		.byte	0x4
+ 1205 00a4 05       		.byte	0x5
+ 1206 00a5 00       		.byte	0
+ 1207 00a6 B8000000 		.4byte	0xb8
+ 1208 00aa 09       		.uleb128 0x9
+ 1209 00ab D4020000 		.4byte	.LASF54
+ 1210 00af 79000000 		.4byte	0x79
+ 1211 00b3 02       		.byte	0x2
+ 1212 00b4 23       		.byte	0x23
+ 1213 00b5 00       		.uleb128 0
+ 1214 00b6 01       		.byte	0x1
+ 1215 00b7 00       		.byte	0
+ 1216 00b8 07       		.uleb128 0x7
+ 1217 00b9 44000000 		.4byte	.LASF13
+ 1218 00bd 02       		.byte	0x2
+ 1219 00be 62       		.byte	0x62
+ 1220 00bf 93000000 		.4byte	0x93
+ 1221 00c3 0A       		.uleb128 0xa
+ 1222 00c4 FB010000 		.4byte	.LASF18
+ 1223 00c8 01       		.byte	0x1
+ 1224 00c9 39       		.byte	0x39
+ 1225 00ca 01       		.byte	0x1
+ 1226 00cb 01       		.byte	0x1
+ 1227 00cc 11010000 		.4byte	0x111
+ 1228 00d0 0B       		.uleb128 0xb
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 34
+
+
+ 1229 00d1 72010000 		.4byte	.LASF14
+ 1230 00d5 01       		.byte	0x1
+ 1231 00d6 39       		.byte	0x39
+ 1232 00d7 1D010000 		.4byte	0x11d
+ 1233 00db 0B       		.uleb128 0xb
+ 1234 00dc 6B010000 		.4byte	.LASF15
+ 1235 00e0 01       		.byte	0x1
+ 1236 00e1 3A       		.byte	0x3a
+ 1237 00e2 2C000000 		.4byte	0x2c
+ 1238 00e6 0B       		.uleb128 0xb
+ 1239 00e7 85010000 		.4byte	.LASF16
+ 1240 00eb 01       		.byte	0x1
+ 1241 00ec 3B       		.byte	0x3b
+ 1242 00ed 2C000000 		.4byte	0x2c
+ 1243 00f1 0C       		.uleb128 0xc
+ 1244 00f2 7000     		.ascii	"p\000"
+ 1245 00f4 01       		.byte	0x1
+ 1246 00f5 3D       		.byte	0x3d
+ 1247 00f6 7B000000 		.4byte	0x7b
+ 1248 00fa 0C       		.uleb128 0xc
+ 1249 00fb 62756600 		.ascii	"buf\000"
+ 1250 00ff 01       		.byte	0x1
+ 1251 0100 3E       		.byte	0x3e
+ 1252 0101 23010000 		.4byte	0x123
+ 1253 0105 0D       		.uleb128 0xd
+ 1254 0106 8A010000 		.4byte	.LASF17
+ 1255 010a 01       		.byte	0x1
+ 1256 010b 3F       		.byte	0x3f
+ 1257 010c 33010000 		.4byte	0x133
+ 1258 0110 00       		.byte	0
+ 1259 0111 0E       		.uleb128 0xe
+ 1260 0112 01       		.byte	0x1
+ 1261 0113 1D010000 		.4byte	0x11d
+ 1262 0117 0F       		.uleb128 0xf
+ 1263 0118 81000000 		.4byte	0x81
+ 1264 011c 00       		.byte	0
+ 1265 011d 05       		.uleb128 0x5
+ 1266 011e 04       		.byte	0x4
+ 1267 011f 11010000 		.4byte	0x111
+ 1268 0123 10       		.uleb128 0x10
+ 1269 0124 81000000 		.4byte	0x81
+ 1270 0128 33010000 		.4byte	0x133
+ 1271 012c 11       		.uleb128 0x11
+ 1272 012d 72000000 		.4byte	0x72
+ 1273 0131 20       		.byte	0x20
+ 1274 0132 00       		.byte	0
+ 1275 0133 10       		.uleb128 0x10
+ 1276 0134 81000000 		.4byte	0x81
+ 1277 0138 43010000 		.4byte	0x143
+ 1278 013c 11       		.uleb128 0x11
+ 1279 013d 72000000 		.4byte	0x72
+ 1280 0141 10       		.byte	0x10
+ 1281 0142 00       		.byte	0
+ 1282 0143 0A       		.uleb128 0xa
+ 1283 0144 B4010000 		.4byte	.LASF19
+ 1284 0148 01       		.byte	0x1
+ 1285 0149 5D       		.byte	0x5d
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 35
+
+
+ 1286 014a 01       		.byte	0x1
+ 1287 014b 01       		.byte	0x1
+ 1288 014c A0010000 		.4byte	0x1a0
+ 1289 0150 0B       		.uleb128 0xb
+ 1290 0151 72010000 		.4byte	.LASF14
+ 1291 0155 01       		.byte	0x1
+ 1292 0156 5D       		.byte	0x5d
+ 1293 0157 1D010000 		.4byte	0x11d
+ 1294 015b 12       		.uleb128 0x12
+ 1295 015c 666D7400 		.ascii	"fmt\000"
+ 1296 0160 01       		.byte	0x1
+ 1297 0161 5E       		.byte	0x5e
+ 1298 0162 88000000 		.4byte	0x88
+ 1299 0166 12       		.uleb128 0x12
+ 1300 0167 617000   		.ascii	"ap\000"
+ 1301 016a 01       		.byte	0x1
+ 1302 016b 5F       		.byte	0x5f
+ 1303 016c B8000000 		.4byte	0xb8
+ 1304 0170 0C       		.uleb128 0xc
+ 1305 0171 7000     		.ascii	"p\000"
+ 1306 0173 01       		.byte	0x1
+ 1307 0174 61       		.byte	0x61
+ 1308 0175 7B000000 		.4byte	0x7b
+ 1309 0179 0C       		.uleb128 0xc
+ 1310 017a 636800   		.ascii	"ch\000"
+ 1311 017d 01       		.byte	0x1
+ 1312 017e 62       		.byte	0x62
+ 1313 017f 81000000 		.4byte	0x81
+ 1314 0183 0C       		.uleb128 0xc
+ 1315 0184 756C00   		.ascii	"ul\000"
+ 1316 0187 01       		.byte	0x1
+ 1317 0188 63       		.byte	0x63
+ 1318 0189 64000000 		.4byte	0x64
+ 1319 018d 0D       		.uleb128 0xd
+ 1320 018e F5010000 		.4byte	.LASF20
+ 1321 0192 01       		.byte	0x1
+ 1322 0193 64       		.byte	0x64
+ 1323 0194 48000000 		.4byte	0x48
+ 1324 0198 13       		.uleb128 0x13
+ 1325 0199 17000000 		.4byte	.LASF55
+ 1326 019d 01       		.byte	0x1
+ 1327 019e 70       		.byte	0x70
+ 1328 019f 00       		.byte	0
+ 1329 01a0 14       		.uleb128 0x14
+ 1330 01a1 01       		.byte	0x1
+ 1331 01a2 69000000 		.4byte	.LASF56
+ 1332 01a6 01       		.byte	0x1
+ 1333 01a7 C6       		.byte	0xc6
+ 1334 01a8 01       		.byte	0x1
+ 1335 01a9 00000000 		.4byte	.LFB2
+ 1336 01ad 50000000 		.4byte	.LFE2
+ 1337 01b1 02       		.byte	0x2
+ 1338 01b2 7D       		.byte	0x7d
+ 1339 01b3 00       		.sleb128 0
+ 1340 01b4 01       		.byte	0x1
+ 1341 01b5 15       		.uleb128 0x15
+ 1342 01b6 01       		.byte	0x1
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 36
+
+
+ 1343 01b7 30000000 		.4byte	.LASF22
+ 1344 01bb 01       		.byte	0x1
+ 1345 01bc EB       		.byte	0xeb
+ 1346 01bd 01       		.byte	0x1
+ 1347 01be 50000000 		.4byte	.LFB3
+ 1348 01c2 70000000 		.4byte	.LFE3
+ 1349 01c6 02       		.byte	0x2
+ 1350 01c7 7D       		.byte	0x7d
+ 1351 01c8 00       		.sleb128 0
+ 1352 01c9 01       		.byte	0x1
+ 1353 01ca DC010000 		.4byte	0x1dc
+ 1354 01ce 16       		.uleb128 0x16
+ 1355 01cf C9000000 		.4byte	.LASF21
+ 1356 01d3 01       		.byte	0x1
+ 1357 01d4 EB       		.byte	0xeb
+ 1358 01d5 81000000 		.4byte	0x81
+ 1359 01d9 01       		.byte	0x1
+ 1360 01da 50       		.byte	0x50
+ 1361 01db 00       		.byte	0
+ 1362 01dc 17       		.uleb128 0x17
+ 1363 01dd 01       		.byte	0x1
+ 1364 01de 01010000 		.4byte	.LASF57
+ 1365 01e2 01       		.byte	0x1
+ 1366 01e3 FD       		.byte	0xfd
+ 1367 01e4 01       		.byte	0x1
+ 1368 01e5 01       		.byte	0x1
+ 1369 01e6 F6010000 		.4byte	0x1f6
+ 1370 01ea 0B       		.uleb128 0xb
+ 1371 01eb C9000000 		.4byte	.LASF21
+ 1372 01ef 01       		.byte	0x1
+ 1373 01f0 FD       		.byte	0xfd
+ 1374 01f1 81000000 		.4byte	0x81
+ 1375 01f5 00       		.byte	0
+ 1376 01f6 18       		.uleb128 0x18
+ 1377 01f7 DC010000 		.4byte	0x1dc
+ 1378 01fb 70000000 		.4byte	.LFB4
+ 1379 01ff 94000000 		.4byte	.LFE4
+ 1380 0203 00000000 		.4byte	.LLST0
+ 1381 0207 01       		.byte	0x1
+ 1382 0208 33020000 		.4byte	0x233
+ 1383 020c 19       		.uleb128 0x19
+ 1384 020d EA010000 		.4byte	0x1ea
+ 1385 0211 2C000000 		.4byte	.LLST1
+ 1386 0215 1A       		.uleb128 0x1a
+ 1387 0216 88000000 		.4byte	.LVL3
+ 1388 021a B5010000 		.4byte	0x1b5
+ 1389 021e 28020000 		.4byte	0x228
+ 1390 0222 1B       		.uleb128 0x1b
+ 1391 0223 01       		.byte	0x1
+ 1392 0224 50       		.byte	0x50
+ 1393 0225 01       		.byte	0x1
+ 1394 0226 3D       		.byte	0x3d
+ 1395 0227 00       		.byte	0
+ 1396 0228 1C       		.uleb128 0x1c
+ 1397 0229 94000000 		.4byte	.LVL4
+ 1398 022d 01       		.byte	0x1
+ 1399 022e B5010000 		.4byte	0x1b5
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 37
+
+
+ 1400 0232 00       		.byte	0
+ 1401 0233 1D       		.uleb128 0x1d
+ 1402 0234 C3000000 		.4byte	0xc3
+ 1403 0238 94000000 		.4byte	.LFB13
+ 1404 023c 0C010000 		.4byte	.LFE13
+ 1405 0240 4D000000 		.4byte	.LLST2
+ 1406 0244 01       		.byte	0x1
+ 1407 0245 AD020000 		.4byte	0x2ad
+ 1408 0249 19       		.uleb128 0x19
+ 1409 024a DB000000 		.4byte	0xdb
+ 1410 024e 92000000 		.4byte	.LLST3
+ 1411 0252 19       		.uleb128 0x19
+ 1412 0253 E6000000 		.4byte	0xe6
+ 1413 0257 C6000000 		.4byte	.LLST4
+ 1414 025b 1E       		.uleb128 0x1e
+ 1415 025c F1000000 		.4byte	0xf1
+ 1416 0260 F2000000 		.4byte	.LLST5
+ 1417 0264 1F       		.uleb128 0x1f
+ 1418 0265 FA000000 		.4byte	0xfa
+ 1419 0269 02       		.byte	0x2
+ 1420 026a 91       		.byte	0x91
+ 1421 026b 44       		.sleb128 -60
+ 1422 026c 1F       		.uleb128 0x1f
+ 1423 026d 05010000 		.4byte	0x105
+ 1424 0271 03       		.byte	0x3
+ 1425 0272 91       		.byte	0x91
+ 1426 0273 B07F     		.sleb128 -80
+ 1427 0275 20       		.uleb128 0x20
+ 1428 0276 D0000000 		.4byte	0xd0
+ 1429 027a 06       		.byte	0x6
+ 1430 027b 03       		.byte	0x3
+ 1431 027c 00000000 		.4byte	consolSendCh
+ 1432 0280 9F       		.byte	0x9f
+ 1433 0281 1A       		.uleb128 0x1a
+ 1434 0282 B8000000 		.4byte	.LVL8
+ 1435 0286 77070000 		.4byte	0x777
+ 1436 028a A3020000 		.4byte	0x2a3
+ 1437 028e 1B       		.uleb128 0x1b
+ 1438 028f 01       		.byte	0x1
+ 1439 0290 50       		.byte	0x50
+ 1440 0291 02       		.byte	0x2
+ 1441 0292 7D       		.byte	0x7d
+ 1442 0293 00       		.sleb128 0
+ 1443 0294 1B       		.uleb128 0x1b
+ 1444 0295 01       		.byte	0x1
+ 1445 0296 51       		.byte	0x51
+ 1446 0297 05       		.byte	0x5
+ 1447 0298 03       		.byte	0x3
+ 1448 0299 00000000 		.4byte	.LC0
+ 1449 029d 1B       		.uleb128 0x1b
+ 1450 029e 01       		.byte	0x1
+ 1451 029f 52       		.byte	0x52
+ 1452 02a0 01       		.byte	0x1
+ 1453 02a1 41       		.byte	0x41
+ 1454 02a2 00       		.byte	0
+ 1455 02a3 21       		.uleb128 0x21
+ 1456 02a4 F4000000 		.4byte	.LVL15
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 38
+
+
+ 1457 02a8 DC010000 		.4byte	0x1dc
+ 1458 02ac 00       		.byte	0
+ 1459 02ad 22       		.uleb128 0x22
+ 1460 02ae 01       		.byte	0x1
+ 1461 02af 06000000 		.4byte	.LASF23
+ 1462 02b3 01       		.byte	0x1
+ 1463 02b4 0F01     		.2byte	0x10f
+ 1464 02b6 01       		.byte	0x1
+ 1465 02b7 0C010000 		.4byte	.LFB5
+ 1466 02bb 30010000 		.4byte	.LFE5
+ 1467 02bf 2A010000 		.4byte	.LLST6
+ 1468 02c3 01       		.byte	0x1
+ 1469 02c4 E2020000 		.4byte	0x2e2
+ 1470 02c8 23       		.uleb128 0x23
+ 1471 02c9 81020000 		.4byte	.LASF24
+ 1472 02cd 01       		.byte	0x1
+ 1473 02ce 0F01     		.2byte	0x10f
+ 1474 02d0 7B000000 		.4byte	0x7b
+ 1475 02d4 56010000 		.4byte	.LLST7
+ 1476 02d8 21       		.uleb128 0x21
+ 1477 02d9 24010000 		.4byte	.LVL21
+ 1478 02dd DC010000 		.4byte	0x1dc
+ 1479 02e1 00       		.byte	0
+ 1480 02e2 24       		.uleb128 0x24
+ 1481 02e3 01       		.byte	0x1
+ 1482 02e4 47010000 		.4byte	.LASF25
+ 1483 02e8 01       		.byte	0x1
+ 1484 02e9 2601     		.2byte	0x126
+ 1485 02eb 01       		.byte	0x1
+ 1486 02ec 30010000 		.4byte	.LFB6
+ 1487 02f0 30020000 		.4byte	.LFE6
+ 1488 02f4 99010000 		.4byte	.LLST8
+ 1489 02f8 01       		.byte	0x1
+ 1490 02f9 A8030000 		.4byte	0x3a8
+ 1491 02fd 23       		.uleb128 0x23
+ 1492 02fe 85010000 		.4byte	.LASF16
+ 1493 0302 01       		.byte	0x1
+ 1494 0303 2601     		.2byte	0x126
+ 1495 0305 48000000 		.4byte	0x48
+ 1496 0309 DE010000 		.4byte	.LLST9
+ 1497 030d 23       		.uleb128 0x23
+ 1498 030e C6020000 		.4byte	.LASF26
+ 1499 0312 01       		.byte	0x1
+ 1500 0313 2701     		.2byte	0x127
+ 1501 0315 48000000 		.4byte	0x48
+ 1502 0319 FF010000 		.4byte	.LLST10
+ 1503 031d 23       		.uleb128 0x23
+ 1504 031e D9020000 		.4byte	.LASF27
+ 1505 0322 01       		.byte	0x1
+ 1506 0323 2801     		.2byte	0x128
+ 1507 0325 48000000 		.4byte	0x48
+ 1508 0329 20020000 		.4byte	.LLST11
+ 1509 032d 25       		.uleb128 0x25
+ 1510 032e 70616400 		.ascii	"pad\000"
+ 1511 0332 01       		.byte	0x1
+ 1512 0333 2901     		.2byte	0x129
+ 1513 0335 81000000 		.4byte	0x81
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 39
+
+
+ 1514 0339 41020000 		.4byte	.LLST12
+ 1515 033d 26       		.uleb128 0x26
+ 1516 033e 6B010000 		.4byte	.LASF15
+ 1517 0342 01       		.byte	0x1
+ 1518 0343 2A01     		.2byte	0x12a
+ 1519 0345 25000000 		.4byte	0x25
+ 1520 0349 02       		.byte	0x2
+ 1521 034a 91       		.byte	0x91
+ 1522 034b 00       		.sleb128 0
+ 1523 034c 27       		.uleb128 0x27
+ 1524 034d 8A010000 		.4byte	.LASF17
+ 1525 0351 01       		.byte	0x1
+ 1526 0352 2C01     		.2byte	0x12c
+ 1527 0354 B8030000 		.4byte	0x3b8
+ 1528 0358 05       		.byte	0x5
+ 1529 0359 03       		.byte	0x3
+ 1530 035a 00000000 		.4byte	hexChars.5043
+ 1531 035e 28       		.uleb128 0x28
+ 1532 035f CF020000 		.4byte	.LASF28
+ 1533 0363 01       		.byte	0x1
+ 1534 0364 2D01     		.2byte	0x12d
+ 1535 0366 7B000000 		.4byte	0x7b
+ 1536 036a 62020000 		.4byte	.LLST13
+ 1537 036e 29       		.uleb128 0x29
+ 1538 036f 62756600 		.ascii	"buf\000"
+ 1539 0373 01       		.byte	0x1
+ 1540 0374 2E01     		.2byte	0x12e
+ 1541 0376 BD030000 		.4byte	0x3bd
+ 1542 037a 03       		.byte	0x3
+ 1543 037b 91       		.byte	0x91
+ 1544 037c B87F     		.sleb128 -72
+ 1545 037e 28       		.uleb128 0x28
+ 1546 037f DE020000 		.4byte	.LASF29
+ 1547 0383 01       		.byte	0x1
+ 1548 0384 2F01     		.2byte	0x12f
+ 1549 0386 2C000000 		.4byte	0x2c
+ 1550 038a BF020000 		.4byte	.LLST14
+ 1551 038e 28       		.uleb128 0x28
+ 1552 038f 00000000 		.4byte	.LASF30
+ 1553 0393 01       		.byte	0x1
+ 1554 0394 3001     		.2byte	0x130
+ 1555 0396 48000000 		.4byte	0x48
+ 1556 039a FE020000 		.4byte	.LLST15
+ 1557 039e 21       		.uleb128 0x21
+ 1558 039f 20020000 		.4byte	.LVL47
+ 1559 03a3 AD020000 		.4byte	0x2ad
+ 1560 03a7 00       		.byte	0
+ 1561 03a8 10       		.uleb128 0x10
+ 1562 03a9 81000000 		.4byte	0x81
+ 1563 03ad B8030000 		.4byte	0x3b8
+ 1564 03b1 11       		.uleb128 0x11
+ 1565 03b2 72000000 		.4byte	0x72
+ 1566 03b6 0F       		.byte	0xf
+ 1567 03b7 00       		.byte	0
+ 1568 03b8 06       		.uleb128 0x6
+ 1569 03b9 A8030000 		.4byte	0x3a8
+ 1570 03bd 10       		.uleb128 0x10
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 40
+
+
+ 1571 03be 81000000 		.4byte	0x81
+ 1572 03c2 CD030000 		.4byte	0x3cd
+ 1573 03c6 11       		.uleb128 0x11
+ 1574 03c7 72000000 		.4byte	0x72
+ 1575 03cb 1F       		.byte	0x1f
+ 1576 03cc 00       		.byte	0
+ 1577 03cd 22       		.uleb128 0x22
+ 1578 03ce 01       		.byte	0x1
+ 1579 03cf BC000000 		.4byte	.LASF31
+ 1580 03d3 01       		.byte	0x1
+ 1581 03d4 6B01     		.2byte	0x16b
+ 1582 03d6 01       		.byte	0x1
+ 1583 03d7 30020000 		.4byte	.LFB7
+ 1584 03db 94030000 		.4byte	.LFE7
+ 1585 03df 27030000 		.4byte	.LLST16
+ 1586 03e3 01       		.byte	0x1
+ 1587 03e4 46050000 		.4byte	0x546
+ 1588 03e8 2A       		.uleb128 0x2a
+ 1589 03e9 666D7400 		.ascii	"fmt\000"
+ 1590 03ed 01       		.byte	0x1
+ 1591 03ee 6B01     		.2byte	0x16b
+ 1592 03f0 88000000 		.4byte	0x88
+ 1593 03f4 02       		.byte	0x2
+ 1594 03f5 91       		.byte	0x91
+ 1595 03f6 70       		.sleb128 -16
+ 1596 03f7 2B       		.uleb128 0x2b
+ 1597 03f8 29       		.uleb128 0x29
+ 1598 03f9 617000   		.ascii	"ap\000"
+ 1599 03fc 01       		.byte	0x1
+ 1600 03fd 6E01     		.2byte	0x16e
+ 1601 03ff B8000000 		.4byte	0xb8
+ 1602 0403 02       		.byte	0x2
+ 1603 0404 91       		.byte	0x91
+ 1604 0405 5C       		.sleb128 -36
+ 1605 0406 2C       		.uleb128 0x2c
+ 1606 0407 43010000 		.4byte	0x143
+ 1607 040b 44020000 		.4byte	.LBB12
+ 1608 040f 84030000 		.4byte	.LBE12
+ 1609 0413 01       		.byte	0x1
+ 1610 0414 7101     		.2byte	0x171
+ 1611 0416 20       		.uleb128 0x20
+ 1612 0417 50010000 		.4byte	0x150
+ 1613 041b 06       		.byte	0x6
+ 1614 041c 03       		.byte	0x3
+ 1615 041d 00000000 		.4byte	consolSendCh
+ 1616 0421 9F       		.byte	0x9f
+ 1617 0422 19       		.uleb128 0x19
+ 1618 0423 66010000 		.4byte	0x166
+ 1619 0427 77030000 		.4byte	.LLST17
+ 1620 042b 19       		.uleb128 0x19
+ 1621 042c 5B010000 		.4byte	0x15b
+ 1622 0430 CD030000 		.4byte	.LLST18
+ 1623 0434 2D       		.uleb128 0x2d
+ 1624 0435 44020000 		.4byte	.LBB13
+ 1625 0439 84030000 		.4byte	.LBE13
+ 1626 043d 1E       		.uleb128 0x1e
+ 1627 043e 70010000 		.4byte	0x170
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 41
+
+
+ 1628 0442 1D040000 		.4byte	.LLST19
+ 1629 0446 1E       		.uleb128 0x1e
+ 1630 0447 79010000 		.4byte	0x179
+ 1631 044b 3D040000 		.4byte	.LLST20
+ 1632 044f 1E       		.uleb128 0x1e
+ 1633 0450 83010000 		.4byte	0x183
+ 1634 0454 D7040000 		.4byte	.LLST21
+ 1635 0458 2E       		.uleb128 0x2e
+ 1636 0459 8D010000 		.4byte	0x18d
+ 1637 045d 2F       		.uleb128 0x2f
+ 1638 045e 98010000 		.4byte	0x198
+ 1639 0462 30       		.uleb128 0x30
+ 1640 0463 DC010000 		.4byte	0x1dc
+ 1641 0467 B8020000 		.4byte	.LBB14
+ 1642 046b C0020000 		.4byte	.LBE14
+ 1643 046f 01       		.byte	0x1
+ 1644 0470 A4       		.byte	0xa4
+ 1645 0471 8F040000 		.4byte	0x48f
+ 1646 0475 19       		.uleb128 0x19
+ 1647 0476 EA010000 		.4byte	0x1ea
+ 1648 047a 02050000 		.4byte	.LLST22
+ 1649 047e 31       		.uleb128 0x31
+ 1650 047f C0020000 		.4byte	.LVL57
+ 1651 0483 B5010000 		.4byte	0x1b5
+ 1652 0487 1B       		.uleb128 0x1b
+ 1653 0488 01       		.byte	0x1
+ 1654 0489 50       		.byte	0x50
+ 1655 048a 02       		.byte	0x2
+ 1656 048b 08       		.byte	0x8
+ 1657 048c 30       		.byte	0x30
+ 1658 048d 00       		.byte	0
+ 1659 048e 00       		.byte	0
+ 1660 048f 30       		.uleb128 0x30
+ 1661 0490 DC010000 		.4byte	0x1dc
+ 1662 0494 C0020000 		.4byte	.LBB16
+ 1663 0498 CC020000 		.4byte	.LBE16
+ 1664 049c 01       		.byte	0x1
+ 1665 049d A5       		.byte	0xa5
+ 1666 049e BC040000 		.4byte	0x4bc
+ 1667 04a2 19       		.uleb128 0x19
+ 1668 04a3 EA010000 		.4byte	0x1ea
+ 1669 04a7 17050000 		.4byte	.LLST23
+ 1670 04ab 31       		.uleb128 0x31
+ 1671 04ac C8020000 		.4byte	.LVL58
+ 1672 04b0 B5010000 		.4byte	0x1b5
+ 1673 04b4 1B       		.uleb128 0x1b
+ 1674 04b5 01       		.byte	0x1
+ 1675 04b6 50       		.byte	0x50
+ 1676 04b7 02       		.byte	0x2
+ 1677 04b8 08       		.byte	0x8
+ 1678 04b9 78       		.byte	0x78
+ 1679 04ba 00       		.byte	0
+ 1680 04bb 00       		.byte	0
+ 1681 04bc 30       		.uleb128 0x30
+ 1682 04bd DC010000 		.4byte	0x1dc
+ 1683 04c1 24030000 		.4byte	.LBB18
+ 1684 04c5 2C030000 		.4byte	.LBE18
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 42
+
+
+ 1685 04c9 01       		.byte	0x1
+ 1686 04ca 93       		.byte	0x93
+ 1687 04cb E9040000 		.4byte	0x4e9
+ 1688 04cf 19       		.uleb128 0x19
+ 1689 04d0 EA010000 		.4byte	0x1ea
+ 1690 04d4 2C050000 		.4byte	.LLST24
+ 1691 04d8 31       		.uleb128 0x31
+ 1692 04d9 2C030000 		.4byte	.LVL71
+ 1693 04dd B5010000 		.4byte	0x1b5
+ 1694 04e1 1B       		.uleb128 0x1b
+ 1695 04e2 01       		.byte	0x1
+ 1696 04e3 50       		.byte	0x50
+ 1697 04e4 02       		.byte	0x2
+ 1698 04e5 08       		.byte	0x8
+ 1699 04e6 2D       		.byte	0x2d
+ 1700 04e7 00       		.byte	0
+ 1701 04e8 00       		.byte	0
+ 1702 04e9 30       		.uleb128 0x30
+ 1703 04ea DC010000 		.4byte	0x1dc
+ 1704 04ee 6C030000 		.4byte	.LBB20
+ 1705 04f2 74030000 		.4byte	.LBE20
+ 1706 04f6 01       		.byte	0x1
+ 1707 04f7 B1       		.byte	0xb1
+ 1708 04f8 16050000 		.4byte	0x516
+ 1709 04fc 19       		.uleb128 0x19
+ 1710 04fd EA010000 		.4byte	0x1ea
+ 1711 0501 41050000 		.4byte	.LLST25
+ 1712 0505 31       		.uleb128 0x31
+ 1713 0506 74030000 		.4byte	.LVL85
+ 1714 050a B5010000 		.4byte	0x1b5
+ 1715 050e 1B       		.uleb128 0x1b
+ 1716 050f 01       		.byte	0x1
+ 1717 0510 50       		.byte	0x50
+ 1718 0511 02       		.byte	0x2
+ 1719 0512 08       		.byte	0x8
+ 1720 0513 6C       		.byte	0x6c
+ 1721 0514 00       		.byte	0
+ 1722 0515 00       		.byte	0
+ 1723 0516 21       		.uleb128 0x21
+ 1724 0517 60020000 		.4byte	.LVL52
+ 1725 051b DC010000 		.4byte	0x1dc
+ 1726 051f 21       		.uleb128 0x21
+ 1727 0520 F0020000 		.4byte	.LVL61
+ 1728 0524 DC010000 		.4byte	0x1dc
+ 1729 0528 21       		.uleb128 0x21
+ 1730 0529 10030000 		.4byte	.LVL67
+ 1731 052d DC010000 		.4byte	0x1dc
+ 1732 0531 21       		.uleb128 0x21
+ 1733 0532 64030000 		.4byte	.LVL82
+ 1734 0536 33020000 		.4byte	0x233
+ 1735 053a 21       		.uleb128 0x21
+ 1736 053b 7C030000 		.4byte	.LVL86
+ 1737 053f DC010000 		.4byte	0x1dc
+ 1738 0543 00       		.byte	0
+ 1739 0544 00       		.byte	0
+ 1740 0545 00       		.byte	0
+ 1741 0546 32       		.uleb128 0x32
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 43
+
+
+ 1742 0547 01       		.byte	0x1
+ 1743 0548 A8010000 		.4byte	.LASF58
+ 1744 054c 01       		.byte	0x1
+ 1745 054d 8301     		.2byte	0x183
+ 1746 054f 01       		.byte	0x1
+ 1747 0550 81000000 		.4byte	0x81
+ 1748 0554 94030000 		.4byte	.LFB8
+ 1749 0558 B8030000 		.4byte	.LFE8
+ 1750 055c 02       		.byte	0x2
+ 1751 055d 7D       		.byte	0x7d
+ 1752 055e 00       		.sleb128 0
+ 1753 055f 01       		.byte	0x1
+ 1754 0560 33       		.uleb128 0x33
+ 1755 0561 01       		.byte	0x1
+ 1756 0562 8C000000 		.4byte	.LASF36
+ 1757 0566 01       		.byte	0x1
+ 1758 0567 9801     		.2byte	0x198
+ 1759 0569 01       		.byte	0x1
+ 1760 056a 81000000 		.4byte	0x81
+ 1761 056e B8030000 		.4byte	.LFB9
+ 1762 0572 DC030000 		.4byte	.LFE9
+ 1763 0576 02       		.byte	0x2
+ 1764 0577 7D       		.byte	0x7d
+ 1765 0578 00       		.sleb128 0
+ 1766 0579 01       		.byte	0x1
+ 1767 057a 8F050000 		.4byte	0x58f
+ 1768 057e 23       		.uleb128 0x23
+ 1769 057f A1020000 		.4byte	.LASF32
+ 1770 0583 01       		.byte	0x1
+ 1771 0584 9801     		.2byte	0x198
+ 1772 0586 7B000000 		.4byte	0x7b
+ 1773 058a 56050000 		.4byte	.LLST26
+ 1774 058e 00       		.byte	0
+ 1775 058f 22       		.uleb128 0x22
+ 1776 0590 01       		.byte	0x1
+ 1777 0591 20000000 		.4byte	.LASF33
+ 1778 0595 01       		.byte	0x1
+ 1779 0596 AC01     		.2byte	0x1ac
+ 1780 0598 01       		.byte	0x1
+ 1781 0599 DC030000 		.4byte	.LFB10
+ 1782 059d 44040000 		.4byte	.LFE10
+ 1783 05a1 77050000 		.4byte	.LLST27
+ 1784 05a5 01       		.byte	0x1
+ 1785 05a6 14060000 		.4byte	0x614
+ 1786 05aa 23       		.uleb128 0x23
+ 1787 05ab 81020000 		.4byte	.LASF24
+ 1788 05af 01       		.byte	0x1
+ 1789 05b0 AC01     		.2byte	0x1ac
+ 1790 05b2 7B000000 		.4byte	0x7b
+ 1791 05b6 A3050000 		.4byte	.LLST28
+ 1792 05ba 28       		.uleb128 0x28
+ 1793 05bb EE000000 		.4byte	.LASF34
+ 1794 05bf 01       		.byte	0x1
+ 1795 05c0 AE01     		.2byte	0x1ae
+ 1796 05c2 7B000000 		.4byte	0x7b
+ 1797 05c6 D7050000 		.4byte	.LLST29
+ 1798 05ca 28       		.uleb128 0x28
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 44
+
+
+ 1799 05cb 7F000000 		.4byte	.LASF35
+ 1800 05cf 01       		.byte	0x1
+ 1801 05d0 AF01     		.2byte	0x1af
+ 1802 05d2 81000000 		.4byte	0x81
+ 1803 05d6 03060000 		.4byte	.LLST30
+ 1804 05da 21       		.uleb128 0x21
+ 1805 05db EC030000 		.4byte	.LVL92
+ 1806 05df 46050000 		.4byte	0x546
+ 1807 05e3 1A       		.uleb128 0x1a
+ 1808 05e4 10040000 		.4byte	.LVL95
+ 1809 05e8 AD020000 		.4byte	0x2ad
+ 1810 05ec FA050000 		.4byte	0x5fa
+ 1811 05f0 1B       		.uleb128 0x1b
+ 1812 05f1 01       		.byte	0x1
+ 1813 05f2 50       		.byte	0x50
+ 1814 05f3 05       		.byte	0x5
+ 1815 05f4 03       		.byte	0x3
+ 1816 05f5 11000000 		.4byte	.LC1
+ 1817 05f9 00       		.byte	0
+ 1818 05fa 21       		.uleb128 0x21
+ 1819 05fb 24040000 		.4byte	.LVL99
+ 1820 05ff DC010000 		.4byte	0x1dc
+ 1821 0603 34       		.uleb128 0x34
+ 1822 0604 40040000 		.4byte	.LVL103
+ 1823 0608 01       		.byte	0x1
+ 1824 0609 DC010000 		.4byte	0x1dc
+ 1825 060d 1B       		.uleb128 0x1b
+ 1826 060e 01       		.byte	0x1
+ 1827 060f 50       		.byte	0x50
+ 1828 0610 01       		.byte	0x1
+ 1829 0611 3A       		.byte	0x3a
+ 1830 0612 00       		.byte	0
+ 1831 0613 00       		.byte	0
+ 1832 0614 35       		.uleb128 0x35
+ 1833 0615 01       		.byte	0x1
+ 1834 0616 B1020000 		.4byte	.LASF37
+ 1835 061a 01       		.byte	0x1
+ 1836 061b D101     		.2byte	0x1d1
+ 1837 061d 01       		.byte	0x1
+ 1838 061e 25000000 		.4byte	0x25
+ 1839 0622 44040000 		.4byte	.LFB11
+ 1840 0626 20050000 		.4byte	.LFE11
+ 1841 062a 2C060000 		.4byte	.LLST31
+ 1842 062e 01       		.byte	0x1
+ 1843 062f DA060000 		.4byte	0x6da
+ 1844 0633 27       		.uleb128 0x27
+ 1845 0634 86000000 		.4byte	.LASF38
+ 1846 0638 01       		.byte	0x1
+ 1847 0639 D301     		.2byte	0x1d3
+ 1848 063b DA060000 		.4byte	0x6da
+ 1849 063f 02       		.byte	0x2
+ 1850 0640 91       		.byte	0x91
+ 1851 0641 50       		.sleb128 -48
+ 1852 0642 28       		.uleb128 0x28
+ 1853 0643 81020000 		.4byte	.LASF24
+ 1854 0647 01       		.byte	0x1
+ 1855 0648 D401     		.2byte	0x1d4
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 45
+
+
+ 1856 064a 7B000000 		.4byte	0x7b
+ 1857 064e 70060000 		.4byte	.LLST32
+ 1858 0652 28       		.uleb128 0x28
+ 1859 0653 4C000000 		.4byte	.LASF39
+ 1860 0657 01       		.byte	0x1
+ 1861 0658 D501     		.2byte	0x1d5
+ 1862 065a 25000000 		.4byte	0x25
+ 1863 065e A8060000 		.4byte	.LLST33
+ 1864 0662 28       		.uleb128 0x28
+ 1865 0663 34010000 		.4byte	.LASF40
+ 1866 0667 01       		.byte	0x1
+ 1867 0668 D601     		.2byte	0x1d6
+ 1868 066a 25000000 		.4byte	0x25
+ 1869 066e EA060000 		.4byte	.LLST34
+ 1870 0672 28       		.uleb128 0x28
+ 1871 0673 74000000 		.4byte	.LASF41
+ 1872 0677 01       		.byte	0x1
+ 1873 0678 D701     		.2byte	0x1d7
+ 1874 067a 25000000 		.4byte	0x25
+ 1875 067e 15070000 		.4byte	.LLST35
+ 1876 0682 28       		.uleb128 0x28
+ 1877 0683 B4000000 		.4byte	.LASF42
+ 1878 0687 01       		.byte	0x1
+ 1879 0688 D801     		.2byte	0x1d8
+ 1880 068a 25000000 		.4byte	0x25
+ 1881 068e 35070000 		.4byte	.LLST36
+ 1882 0692 36       		.uleb128 0x36
+ 1883 0693 774900   		.ascii	"wI\000"
+ 1884 0696 01       		.byte	0x1
+ 1885 0697 D901     		.2byte	0x1d9
+ 1886 0699 25000000 		.4byte	0x25
+ 1887 069d 5F070000 		.4byte	.LLST37
+ 1888 06a1 1A       		.uleb128 0x1a
+ 1889 06a2 54040000 		.4byte	.LVL105
+ 1890 06a6 8F050000 		.4byte	0x58f
+ 1891 06aa B5060000 		.4byte	0x6b5
+ 1892 06ae 1B       		.uleb128 0x1b
+ 1893 06af 01       		.byte	0x1
+ 1894 06b0 50       		.byte	0x50
+ 1895 06b1 02       		.byte	0x2
+ 1896 06b2 7D       		.byte	0x7d
+ 1897 06b3 00       		.sleb128 0
+ 1898 06b4 00       		.byte	0
+ 1899 06b5 1A       		.uleb128 0x1a
+ 1900 06b6 9C040000 		.4byte	.LVL109
+ 1901 06ba 82070000 		.4byte	0x782
+ 1902 06be C9060000 		.4byte	0x6c9
+ 1903 06c2 1B       		.uleb128 0x1b
+ 1904 06c3 01       		.byte	0x1
+ 1905 06c4 50       		.byte	0x50
+ 1906 06c5 02       		.byte	0x2
+ 1907 06c6 74       		.byte	0x74
+ 1908 06c7 00       		.sleb128 0
+ 1909 06c8 00       		.byte	0
+ 1910 06c9 31       		.uleb128 0x31
+ 1911 06ca D8040000 		.4byte	.LVL117
+ 1912 06ce 8F070000 		.4byte	0x78f
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 46
+
+
+ 1913 06d2 1B       		.uleb128 0x1b
+ 1914 06d3 01       		.byte	0x1
+ 1915 06d4 50       		.byte	0x50
+ 1916 06d5 02       		.byte	0x2
+ 1917 06d6 74       		.byte	0x74
+ 1918 06d7 00       		.sleb128 0
+ 1919 06d8 00       		.byte	0
+ 1920 06d9 00       		.byte	0
+ 1921 06da 10       		.uleb128 0x10
+ 1922 06db 81000000 		.4byte	0x81
+ 1923 06df EA060000 		.4byte	0x6ea
+ 1924 06e3 11       		.uleb128 0x11
+ 1925 06e4 72000000 		.4byte	0x72
+ 1926 06e8 1D       		.byte	0x1d
+ 1927 06e9 00       		.byte	0
+ 1928 06ea 22       		.uleb128 0x22
+ 1929 06eb 01       		.byte	0x1
+ 1930 06ec 3B010000 		.4byte	.LASF43
+ 1931 06f0 01       		.byte	0x1
+ 1932 06f1 1802     		.2byte	0x218
+ 1933 06f3 01       		.byte	0x1
+ 1934 06f4 20050000 		.4byte	.LFB12
+ 1935 06f8 E8050000 		.4byte	.LFE12
+ 1936 06fc 98070000 		.4byte	.LLST38
+ 1937 0700 01       		.byte	0x1
+ 1938 0701 71070000 		.4byte	0x771
+ 1939 0705 23       		.uleb128 0x23
+ 1940 0706 3F000000 		.4byte	.LASF44
+ 1941 070a 01       		.byte	0x1
+ 1942 070b 1802     		.2byte	0x218
+ 1943 070d 7B000000 		.4byte	0x7b
+ 1944 0711 E8070000 		.4byte	.LLST39
+ 1945 0715 2B       		.uleb128 0x2b
+ 1946 0716 27       		.uleb128 0x27
+ 1947 0717 04020000 		.4byte	.LASF45
+ 1948 071b 01       		.byte	0x1
+ 1949 071c 1A02     		.2byte	0x21a
+ 1950 071e B8000000 		.4byte	0xb8
+ 1951 0722 02       		.byte	0x2
+ 1952 0723 91       		.byte	0x91
+ 1953 0724 5C       		.sleb128 -36
+ 1954 0725 28       		.uleb128 0x28
+ 1955 0726 F7000000 		.4byte	.LASF46
+ 1956 072a 01       		.byte	0x1
+ 1957 072b 1B02     		.2byte	0x21b
+ 1958 072d 81000000 		.4byte	0x81
+ 1959 0731 14080000 		.4byte	.LLST40
+ 1960 0735 28       		.uleb128 0x28
+ 1961 0736 9C020000 		.4byte	.LASF47
+ 1962 073a 01       		.byte	0x1
+ 1963 073b 1C02     		.2byte	0x21c
+ 1964 073d 71070000 		.4byte	0x771
+ 1965 0741 56080000 		.4byte	.LLST41
+ 1966 0745 28       		.uleb128 0x28
+ 1967 0746 A1020000 		.4byte	.LASF32
+ 1968 074a 01       		.byte	0x1
+ 1969 074b 1D02     		.2byte	0x21d
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 47
+
+
+ 1970 074d 7B000000 		.4byte	0x7b
+ 1971 0751 69080000 		.4byte	.LLST42
+ 1972 0755 21       		.uleb128 0x21
+ 1973 0756 9C050000 		.4byte	.LVL132
+ 1974 075a 8F050000 		.4byte	0x58f
+ 1975 075e 21       		.uleb128 0x21
+ 1976 075f B4050000 		.4byte	.LVL135
+ 1977 0763 14060000 		.4byte	0x614
+ 1978 0767 21       		.uleb128 0x21
+ 1979 0768 D0050000 		.4byte	.LVL138
+ 1980 076c 46050000 		.4byte	0x546
+ 1981 0770 00       		.byte	0
+ 1982 0771 05       		.uleb128 0x5
+ 1983 0772 04       		.byte	0x4
+ 1984 0773 25000000 		.4byte	0x25
+ 1985 0777 37       		.uleb128 0x37
+ 1986 0778 01       		.byte	0x1
+ 1987 0779 01       		.byte	0x1
+ 1988 077a E7000000 		.4byte	.LASF59
+ 1989 077e E7000000 		.4byte	.LASF59
+ 1990 0782 38       		.uleb128 0x38
+ 1991 0783 01       		.byte	0x1
+ 1992 0784 01       		.byte	0x1
+ 1993 0785 1B010000 		.4byte	.LASF48
+ 1994 0789 1B010000 		.4byte	.LASF48
+ 1995 078d 03       		.byte	0x3
+ 1996 078e 21       		.byte	0x21
+ 1997 078f 38       		.uleb128 0x38
+ 1998 0790 01       		.byte	0x1
+ 1999 0791 01       		.byte	0x1
+ 2000 0792 89020000 		.4byte	.LASF49
+ 2001 0796 89020000 		.4byte	.LASF49
+ 2002 079a 04       		.byte	0x4
+ 2003 079b 4D       		.byte	0x4d
+ 2004 079c 00       		.byte	0
+ 2005              		.section	.debug_abbrev,"",%progbits
+ 2006              	.Ldebug_abbrev0:
+ 2007 0000 01       		.uleb128 0x1
+ 2008 0001 11       		.uleb128 0x11
+ 2009 0002 01       		.byte	0x1
+ 2010 0003 25       		.uleb128 0x25
+ 2011 0004 0E       		.uleb128 0xe
+ 2012 0005 13       		.uleb128 0x13
+ 2013 0006 0B       		.uleb128 0xb
+ 2014 0007 03       		.uleb128 0x3
+ 2015 0008 0E       		.uleb128 0xe
+ 2016 0009 1B       		.uleb128 0x1b
+ 2017 000a 0E       		.uleb128 0xe
+ 2018 000b 11       		.uleb128 0x11
+ 2019 000c 01       		.uleb128 0x1
+ 2020 000d 12       		.uleb128 0x12
+ 2021 000e 01       		.uleb128 0x1
+ 2022 000f 10       		.uleb128 0x10
+ 2023 0010 06       		.uleb128 0x6
+ 2024 0011 00       		.byte	0
+ 2025 0012 00       		.byte	0
+ 2026 0013 02       		.uleb128 0x2
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 48
+
+
+ 2027 0014 24       		.uleb128 0x24
+ 2028 0015 00       		.byte	0
+ 2029 0016 0B       		.uleb128 0xb
+ 2030 0017 0B       		.uleb128 0xb
+ 2031 0018 3E       		.uleb128 0x3e
+ 2032 0019 0B       		.uleb128 0xb
+ 2033 001a 03       		.uleb128 0x3
+ 2034 001b 08       		.uleb128 0x8
+ 2035 001c 00       		.byte	0
+ 2036 001d 00       		.byte	0
+ 2037 001e 03       		.uleb128 0x3
+ 2038 001f 24       		.uleb128 0x24
+ 2039 0020 00       		.byte	0
+ 2040 0021 0B       		.uleb128 0xb
+ 2041 0022 0B       		.uleb128 0xb
+ 2042 0023 3E       		.uleb128 0x3e
+ 2043 0024 0B       		.uleb128 0xb
+ 2044 0025 03       		.uleb128 0x3
+ 2045 0026 0E       		.uleb128 0xe
+ 2046 0027 00       		.byte	0
+ 2047 0028 00       		.byte	0
+ 2048 0029 04       		.uleb128 0x4
+ 2049 002a 0F       		.uleb128 0xf
+ 2050 002b 00       		.byte	0
+ 2051 002c 0B       		.uleb128 0xb
+ 2052 002d 0B       		.uleb128 0xb
+ 2053 002e 00       		.byte	0
+ 2054 002f 00       		.byte	0
+ 2055 0030 05       		.uleb128 0x5
+ 2056 0031 0F       		.uleb128 0xf
+ 2057 0032 00       		.byte	0
+ 2058 0033 0B       		.uleb128 0xb
+ 2059 0034 0B       		.uleb128 0xb
+ 2060 0035 49       		.uleb128 0x49
+ 2061 0036 13       		.uleb128 0x13
+ 2062 0037 00       		.byte	0
+ 2063 0038 00       		.byte	0
+ 2064 0039 06       		.uleb128 0x6
+ 2065 003a 26       		.uleb128 0x26
+ 2066 003b 00       		.byte	0
+ 2067 003c 49       		.uleb128 0x49
+ 2068 003d 13       		.uleb128 0x13
+ 2069 003e 00       		.byte	0
+ 2070 003f 00       		.byte	0
+ 2071 0040 07       		.uleb128 0x7
+ 2072 0041 16       		.uleb128 0x16
+ 2073 0042 00       		.byte	0
+ 2074 0043 03       		.uleb128 0x3
+ 2075 0044 0E       		.uleb128 0xe
+ 2076 0045 3A       		.uleb128 0x3a
+ 2077 0046 0B       		.uleb128 0xb
+ 2078 0047 3B       		.uleb128 0x3b
+ 2079 0048 0B       		.uleb128 0xb
+ 2080 0049 49       		.uleb128 0x49
+ 2081 004a 13       		.uleb128 0x13
+ 2082 004b 00       		.byte	0
+ 2083 004c 00       		.byte	0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 49
+
+
+ 2084 004d 08       		.uleb128 0x8
+ 2085 004e 13       		.uleb128 0x13
+ 2086 004f 01       		.byte	0x1
+ 2087 0050 03       		.uleb128 0x3
+ 2088 0051 0E       		.uleb128 0xe
+ 2089 0052 0B       		.uleb128 0xb
+ 2090 0053 0B       		.uleb128 0xb
+ 2091 0054 3A       		.uleb128 0x3a
+ 2092 0055 0B       		.uleb128 0xb
+ 2093 0056 3B       		.uleb128 0x3b
+ 2094 0057 0B       		.uleb128 0xb
+ 2095 0058 01       		.uleb128 0x1
+ 2096 0059 13       		.uleb128 0x13
+ 2097 005a 00       		.byte	0
+ 2098 005b 00       		.byte	0
+ 2099 005c 09       		.uleb128 0x9
+ 2100 005d 0D       		.uleb128 0xd
+ 2101 005e 00       		.byte	0
+ 2102 005f 03       		.uleb128 0x3
+ 2103 0060 0E       		.uleb128 0xe
+ 2104 0061 49       		.uleb128 0x49
+ 2105 0062 13       		.uleb128 0x13
+ 2106 0063 38       		.uleb128 0x38
+ 2107 0064 0A       		.uleb128 0xa
+ 2108 0065 34       		.uleb128 0x34
+ 2109 0066 0C       		.uleb128 0xc
+ 2110 0067 00       		.byte	0
+ 2111 0068 00       		.byte	0
+ 2112 0069 0A       		.uleb128 0xa
+ 2113 006a 2E       		.uleb128 0x2e
+ 2114 006b 01       		.byte	0x1
+ 2115 006c 03       		.uleb128 0x3
+ 2116 006d 0E       		.uleb128 0xe
+ 2117 006e 3A       		.uleb128 0x3a
+ 2118 006f 0B       		.uleb128 0xb
+ 2119 0070 3B       		.uleb128 0x3b
+ 2120 0071 0B       		.uleb128 0xb
+ 2121 0072 27       		.uleb128 0x27
+ 2122 0073 0C       		.uleb128 0xc
+ 2123 0074 20       		.uleb128 0x20
+ 2124 0075 0B       		.uleb128 0xb
+ 2125 0076 01       		.uleb128 0x1
+ 2126 0077 13       		.uleb128 0x13
+ 2127 0078 00       		.byte	0
+ 2128 0079 00       		.byte	0
+ 2129 007a 0B       		.uleb128 0xb
+ 2130 007b 05       		.uleb128 0x5
+ 2131 007c 00       		.byte	0
+ 2132 007d 03       		.uleb128 0x3
+ 2133 007e 0E       		.uleb128 0xe
+ 2134 007f 3A       		.uleb128 0x3a
+ 2135 0080 0B       		.uleb128 0xb
+ 2136 0081 3B       		.uleb128 0x3b
+ 2137 0082 0B       		.uleb128 0xb
+ 2138 0083 49       		.uleb128 0x49
+ 2139 0084 13       		.uleb128 0x13
+ 2140 0085 00       		.byte	0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 50
+
+
+ 2141 0086 00       		.byte	0
+ 2142 0087 0C       		.uleb128 0xc
+ 2143 0088 34       		.uleb128 0x34
+ 2144 0089 00       		.byte	0
+ 2145 008a 03       		.uleb128 0x3
+ 2146 008b 08       		.uleb128 0x8
+ 2147 008c 3A       		.uleb128 0x3a
+ 2148 008d 0B       		.uleb128 0xb
+ 2149 008e 3B       		.uleb128 0x3b
+ 2150 008f 0B       		.uleb128 0xb
+ 2151 0090 49       		.uleb128 0x49
+ 2152 0091 13       		.uleb128 0x13
+ 2153 0092 00       		.byte	0
+ 2154 0093 00       		.byte	0
+ 2155 0094 0D       		.uleb128 0xd
+ 2156 0095 34       		.uleb128 0x34
+ 2157 0096 00       		.byte	0
+ 2158 0097 03       		.uleb128 0x3
+ 2159 0098 0E       		.uleb128 0xe
+ 2160 0099 3A       		.uleb128 0x3a
+ 2161 009a 0B       		.uleb128 0xb
+ 2162 009b 3B       		.uleb128 0x3b
+ 2163 009c 0B       		.uleb128 0xb
+ 2164 009d 49       		.uleb128 0x49
+ 2165 009e 13       		.uleb128 0x13
+ 2166 009f 00       		.byte	0
+ 2167 00a0 00       		.byte	0
+ 2168 00a1 0E       		.uleb128 0xe
+ 2169 00a2 15       		.uleb128 0x15
+ 2170 00a3 01       		.byte	0x1
+ 2171 00a4 27       		.uleb128 0x27
+ 2172 00a5 0C       		.uleb128 0xc
+ 2173 00a6 01       		.uleb128 0x1
+ 2174 00a7 13       		.uleb128 0x13
+ 2175 00a8 00       		.byte	0
+ 2176 00a9 00       		.byte	0
+ 2177 00aa 0F       		.uleb128 0xf
+ 2178 00ab 05       		.uleb128 0x5
+ 2179 00ac 00       		.byte	0
+ 2180 00ad 49       		.uleb128 0x49
+ 2181 00ae 13       		.uleb128 0x13
+ 2182 00af 00       		.byte	0
+ 2183 00b0 00       		.byte	0
+ 2184 00b1 10       		.uleb128 0x10
+ 2185 00b2 01       		.uleb128 0x1
+ 2186 00b3 01       		.byte	0x1
+ 2187 00b4 49       		.uleb128 0x49
+ 2188 00b5 13       		.uleb128 0x13
+ 2189 00b6 01       		.uleb128 0x1
+ 2190 00b7 13       		.uleb128 0x13
+ 2191 00b8 00       		.byte	0
+ 2192 00b9 00       		.byte	0
+ 2193 00ba 11       		.uleb128 0x11
+ 2194 00bb 21       		.uleb128 0x21
+ 2195 00bc 00       		.byte	0
+ 2196 00bd 49       		.uleb128 0x49
+ 2197 00be 13       		.uleb128 0x13
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 51
+
+
+ 2198 00bf 2F       		.uleb128 0x2f
+ 2199 00c0 0B       		.uleb128 0xb
+ 2200 00c1 00       		.byte	0
+ 2201 00c2 00       		.byte	0
+ 2202 00c3 12       		.uleb128 0x12
+ 2203 00c4 05       		.uleb128 0x5
+ 2204 00c5 00       		.byte	0
+ 2205 00c6 03       		.uleb128 0x3
+ 2206 00c7 08       		.uleb128 0x8
+ 2207 00c8 3A       		.uleb128 0x3a
+ 2208 00c9 0B       		.uleb128 0xb
+ 2209 00ca 3B       		.uleb128 0x3b
+ 2210 00cb 0B       		.uleb128 0xb
+ 2211 00cc 49       		.uleb128 0x49
+ 2212 00cd 13       		.uleb128 0x13
+ 2213 00ce 00       		.byte	0
+ 2214 00cf 00       		.byte	0
+ 2215 00d0 13       		.uleb128 0x13
+ 2216 00d1 0A       		.uleb128 0xa
+ 2217 00d2 00       		.byte	0
+ 2218 00d3 03       		.uleb128 0x3
+ 2219 00d4 0E       		.uleb128 0xe
+ 2220 00d5 3A       		.uleb128 0x3a
+ 2221 00d6 0B       		.uleb128 0xb
+ 2222 00d7 3B       		.uleb128 0x3b
+ 2223 00d8 0B       		.uleb128 0xb
+ 2224 00d9 00       		.byte	0
+ 2225 00da 00       		.byte	0
+ 2226 00db 14       		.uleb128 0x14
+ 2227 00dc 2E       		.uleb128 0x2e
+ 2228 00dd 00       		.byte	0
+ 2229 00de 3F       		.uleb128 0x3f
+ 2230 00df 0C       		.uleb128 0xc
+ 2231 00e0 03       		.uleb128 0x3
+ 2232 00e1 0E       		.uleb128 0xe
+ 2233 00e2 3A       		.uleb128 0x3a
+ 2234 00e3 0B       		.uleb128 0xb
+ 2235 00e4 3B       		.uleb128 0x3b
+ 2236 00e5 0B       		.uleb128 0xb
+ 2237 00e6 27       		.uleb128 0x27
+ 2238 00e7 0C       		.uleb128 0xc
+ 2239 00e8 11       		.uleb128 0x11
+ 2240 00e9 01       		.uleb128 0x1
+ 2241 00ea 12       		.uleb128 0x12
+ 2242 00eb 01       		.uleb128 0x1
+ 2243 00ec 40       		.uleb128 0x40
+ 2244 00ed 0A       		.uleb128 0xa
+ 2245 00ee 9742     		.uleb128 0x2117
+ 2246 00f0 0C       		.uleb128 0xc
+ 2247 00f1 00       		.byte	0
+ 2248 00f2 00       		.byte	0
+ 2249 00f3 15       		.uleb128 0x15
+ 2250 00f4 2E       		.uleb128 0x2e
+ 2251 00f5 01       		.byte	0x1
+ 2252 00f6 3F       		.uleb128 0x3f
+ 2253 00f7 0C       		.uleb128 0xc
+ 2254 00f8 03       		.uleb128 0x3
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 52
+
+
+ 2255 00f9 0E       		.uleb128 0xe
+ 2256 00fa 3A       		.uleb128 0x3a
+ 2257 00fb 0B       		.uleb128 0xb
+ 2258 00fc 3B       		.uleb128 0x3b
+ 2259 00fd 0B       		.uleb128 0xb
+ 2260 00fe 27       		.uleb128 0x27
+ 2261 00ff 0C       		.uleb128 0xc
+ 2262 0100 11       		.uleb128 0x11
+ 2263 0101 01       		.uleb128 0x1
+ 2264 0102 12       		.uleb128 0x12
+ 2265 0103 01       		.uleb128 0x1
+ 2266 0104 40       		.uleb128 0x40
+ 2267 0105 0A       		.uleb128 0xa
+ 2268 0106 9742     		.uleb128 0x2117
+ 2269 0108 0C       		.uleb128 0xc
+ 2270 0109 01       		.uleb128 0x1
+ 2271 010a 13       		.uleb128 0x13
+ 2272 010b 00       		.byte	0
+ 2273 010c 00       		.byte	0
+ 2274 010d 16       		.uleb128 0x16
+ 2275 010e 05       		.uleb128 0x5
+ 2276 010f 00       		.byte	0
+ 2277 0110 03       		.uleb128 0x3
+ 2278 0111 0E       		.uleb128 0xe
+ 2279 0112 3A       		.uleb128 0x3a
+ 2280 0113 0B       		.uleb128 0xb
+ 2281 0114 3B       		.uleb128 0x3b
+ 2282 0115 0B       		.uleb128 0xb
+ 2283 0116 49       		.uleb128 0x49
+ 2284 0117 13       		.uleb128 0x13
+ 2285 0118 02       		.uleb128 0x2
+ 2286 0119 0A       		.uleb128 0xa
+ 2287 011a 00       		.byte	0
+ 2288 011b 00       		.byte	0
+ 2289 011c 17       		.uleb128 0x17
+ 2290 011d 2E       		.uleb128 0x2e
+ 2291 011e 01       		.byte	0x1
+ 2292 011f 3F       		.uleb128 0x3f
+ 2293 0120 0C       		.uleb128 0xc
+ 2294 0121 03       		.uleb128 0x3
+ 2295 0122 0E       		.uleb128 0xe
+ 2296 0123 3A       		.uleb128 0x3a
+ 2297 0124 0B       		.uleb128 0xb
+ 2298 0125 3B       		.uleb128 0x3b
+ 2299 0126 0B       		.uleb128 0xb
+ 2300 0127 27       		.uleb128 0x27
+ 2301 0128 0C       		.uleb128 0xc
+ 2302 0129 20       		.uleb128 0x20
+ 2303 012a 0B       		.uleb128 0xb
+ 2304 012b 01       		.uleb128 0x1
+ 2305 012c 13       		.uleb128 0x13
+ 2306 012d 00       		.byte	0
+ 2307 012e 00       		.byte	0
+ 2308 012f 18       		.uleb128 0x18
+ 2309 0130 2E       		.uleb128 0x2e
+ 2310 0131 01       		.byte	0x1
+ 2311 0132 31       		.uleb128 0x31
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 53
+
+
+ 2312 0133 13       		.uleb128 0x13
+ 2313 0134 11       		.uleb128 0x11
+ 2314 0135 01       		.uleb128 0x1
+ 2315 0136 12       		.uleb128 0x12
+ 2316 0137 01       		.uleb128 0x1
+ 2317 0138 40       		.uleb128 0x40
+ 2318 0139 06       		.uleb128 0x6
+ 2319 013a 9742     		.uleb128 0x2117
+ 2320 013c 0C       		.uleb128 0xc
+ 2321 013d 01       		.uleb128 0x1
+ 2322 013e 13       		.uleb128 0x13
+ 2323 013f 00       		.byte	0
+ 2324 0140 00       		.byte	0
+ 2325 0141 19       		.uleb128 0x19
+ 2326 0142 05       		.uleb128 0x5
+ 2327 0143 00       		.byte	0
+ 2328 0144 31       		.uleb128 0x31
+ 2329 0145 13       		.uleb128 0x13
+ 2330 0146 02       		.uleb128 0x2
+ 2331 0147 06       		.uleb128 0x6
+ 2332 0148 00       		.byte	0
+ 2333 0149 00       		.byte	0
+ 2334 014a 1A       		.uleb128 0x1a
+ 2335 014b 898201   		.uleb128 0x4109
+ 2336 014e 01       		.byte	0x1
+ 2337 014f 11       		.uleb128 0x11
+ 2338 0150 01       		.uleb128 0x1
+ 2339 0151 31       		.uleb128 0x31
+ 2340 0152 13       		.uleb128 0x13
+ 2341 0153 01       		.uleb128 0x1
+ 2342 0154 13       		.uleb128 0x13
+ 2343 0155 00       		.byte	0
+ 2344 0156 00       		.byte	0
+ 2345 0157 1B       		.uleb128 0x1b
+ 2346 0158 8A8201   		.uleb128 0x410a
+ 2347 015b 00       		.byte	0
+ 2348 015c 02       		.uleb128 0x2
+ 2349 015d 0A       		.uleb128 0xa
+ 2350 015e 9142     		.uleb128 0x2111
+ 2351 0160 0A       		.uleb128 0xa
+ 2352 0161 00       		.byte	0
+ 2353 0162 00       		.byte	0
+ 2354 0163 1C       		.uleb128 0x1c
+ 2355 0164 898201   		.uleb128 0x4109
+ 2356 0167 00       		.byte	0
+ 2357 0168 11       		.uleb128 0x11
+ 2358 0169 01       		.uleb128 0x1
+ 2359 016a 9542     		.uleb128 0x2115
+ 2360 016c 0C       		.uleb128 0xc
+ 2361 016d 31       		.uleb128 0x31
+ 2362 016e 13       		.uleb128 0x13
+ 2363 016f 00       		.byte	0
+ 2364 0170 00       		.byte	0
+ 2365 0171 1D       		.uleb128 0x1d
+ 2366 0172 2E       		.uleb128 0x2e
+ 2367 0173 01       		.byte	0x1
+ 2368 0174 31       		.uleb128 0x31
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 54
+
+
+ 2369 0175 13       		.uleb128 0x13
+ 2370 0176 11       		.uleb128 0x11
+ 2371 0177 01       		.uleb128 0x1
+ 2372 0178 12       		.uleb128 0x12
+ 2373 0179 01       		.uleb128 0x1
+ 2374 017a 40       		.uleb128 0x40
+ 2375 017b 06       		.uleb128 0x6
+ 2376 017c 9642     		.uleb128 0x2116
+ 2377 017e 0C       		.uleb128 0xc
+ 2378 017f 01       		.uleb128 0x1
+ 2379 0180 13       		.uleb128 0x13
+ 2380 0181 00       		.byte	0
+ 2381 0182 00       		.byte	0
+ 2382 0183 1E       		.uleb128 0x1e
+ 2383 0184 34       		.uleb128 0x34
+ 2384 0185 00       		.byte	0
+ 2385 0186 31       		.uleb128 0x31
+ 2386 0187 13       		.uleb128 0x13
+ 2387 0188 02       		.uleb128 0x2
+ 2388 0189 06       		.uleb128 0x6
+ 2389 018a 00       		.byte	0
+ 2390 018b 00       		.byte	0
+ 2391 018c 1F       		.uleb128 0x1f
+ 2392 018d 34       		.uleb128 0x34
+ 2393 018e 00       		.byte	0
+ 2394 018f 31       		.uleb128 0x31
+ 2395 0190 13       		.uleb128 0x13
+ 2396 0191 02       		.uleb128 0x2
+ 2397 0192 0A       		.uleb128 0xa
+ 2398 0193 00       		.byte	0
+ 2399 0194 00       		.byte	0
+ 2400 0195 20       		.uleb128 0x20
+ 2401 0196 05       		.uleb128 0x5
+ 2402 0197 00       		.byte	0
+ 2403 0198 31       		.uleb128 0x31
+ 2404 0199 13       		.uleb128 0x13
+ 2405 019a 02       		.uleb128 0x2
+ 2406 019b 0A       		.uleb128 0xa
+ 2407 019c 00       		.byte	0
+ 2408 019d 00       		.byte	0
+ 2409 019e 21       		.uleb128 0x21
+ 2410 019f 898201   		.uleb128 0x4109
+ 2411 01a2 00       		.byte	0
+ 2412 01a3 11       		.uleb128 0x11
+ 2413 01a4 01       		.uleb128 0x1
+ 2414 01a5 31       		.uleb128 0x31
+ 2415 01a6 13       		.uleb128 0x13
+ 2416 01a7 00       		.byte	0
+ 2417 01a8 00       		.byte	0
+ 2418 01a9 22       		.uleb128 0x22
+ 2419 01aa 2E       		.uleb128 0x2e
+ 2420 01ab 01       		.byte	0x1
+ 2421 01ac 3F       		.uleb128 0x3f
+ 2422 01ad 0C       		.uleb128 0xc
+ 2423 01ae 03       		.uleb128 0x3
+ 2424 01af 0E       		.uleb128 0xe
+ 2425 01b0 3A       		.uleb128 0x3a
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 55
+
+
+ 2426 01b1 0B       		.uleb128 0xb
+ 2427 01b2 3B       		.uleb128 0x3b
+ 2428 01b3 05       		.uleb128 0x5
+ 2429 01b4 27       		.uleb128 0x27
+ 2430 01b5 0C       		.uleb128 0xc
+ 2431 01b6 11       		.uleb128 0x11
+ 2432 01b7 01       		.uleb128 0x1
+ 2433 01b8 12       		.uleb128 0x12
+ 2434 01b9 01       		.uleb128 0x1
+ 2435 01ba 40       		.uleb128 0x40
+ 2436 01bb 06       		.uleb128 0x6
+ 2437 01bc 9742     		.uleb128 0x2117
+ 2438 01be 0C       		.uleb128 0xc
+ 2439 01bf 01       		.uleb128 0x1
+ 2440 01c0 13       		.uleb128 0x13
+ 2441 01c1 00       		.byte	0
+ 2442 01c2 00       		.byte	0
+ 2443 01c3 23       		.uleb128 0x23
+ 2444 01c4 05       		.uleb128 0x5
+ 2445 01c5 00       		.byte	0
+ 2446 01c6 03       		.uleb128 0x3
+ 2447 01c7 0E       		.uleb128 0xe
+ 2448 01c8 3A       		.uleb128 0x3a
+ 2449 01c9 0B       		.uleb128 0xb
+ 2450 01ca 3B       		.uleb128 0x3b
+ 2451 01cb 05       		.uleb128 0x5
+ 2452 01cc 49       		.uleb128 0x49
+ 2453 01cd 13       		.uleb128 0x13
+ 2454 01ce 02       		.uleb128 0x2
+ 2455 01cf 06       		.uleb128 0x6
+ 2456 01d0 00       		.byte	0
+ 2457 01d1 00       		.byte	0
+ 2458 01d2 24       		.uleb128 0x24
+ 2459 01d3 2E       		.uleb128 0x2e
+ 2460 01d4 01       		.byte	0x1
+ 2461 01d5 3F       		.uleb128 0x3f
+ 2462 01d6 0C       		.uleb128 0xc
+ 2463 01d7 03       		.uleb128 0x3
+ 2464 01d8 0E       		.uleb128 0xe
+ 2465 01d9 3A       		.uleb128 0x3a
+ 2466 01da 0B       		.uleb128 0xb
+ 2467 01db 3B       		.uleb128 0x3b
+ 2468 01dc 05       		.uleb128 0x5
+ 2469 01dd 27       		.uleb128 0x27
+ 2470 01de 0C       		.uleb128 0xc
+ 2471 01df 11       		.uleb128 0x11
+ 2472 01e0 01       		.uleb128 0x1
+ 2473 01e1 12       		.uleb128 0x12
+ 2474 01e2 01       		.uleb128 0x1
+ 2475 01e3 40       		.uleb128 0x40
+ 2476 01e4 06       		.uleb128 0x6
+ 2477 01e5 9642     		.uleb128 0x2116
+ 2478 01e7 0C       		.uleb128 0xc
+ 2479 01e8 01       		.uleb128 0x1
+ 2480 01e9 13       		.uleb128 0x13
+ 2481 01ea 00       		.byte	0
+ 2482 01eb 00       		.byte	0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 56
+
+
+ 2483 01ec 25       		.uleb128 0x25
+ 2484 01ed 05       		.uleb128 0x5
+ 2485 01ee 00       		.byte	0
+ 2486 01ef 03       		.uleb128 0x3
+ 2487 01f0 08       		.uleb128 0x8
+ 2488 01f1 3A       		.uleb128 0x3a
+ 2489 01f2 0B       		.uleb128 0xb
+ 2490 01f3 3B       		.uleb128 0x3b
+ 2491 01f4 05       		.uleb128 0x5
+ 2492 01f5 49       		.uleb128 0x49
+ 2493 01f6 13       		.uleb128 0x13
+ 2494 01f7 02       		.uleb128 0x2
+ 2495 01f8 06       		.uleb128 0x6
+ 2496 01f9 00       		.byte	0
+ 2497 01fa 00       		.byte	0
+ 2498 01fb 26       		.uleb128 0x26
+ 2499 01fc 05       		.uleb128 0x5
+ 2500 01fd 00       		.byte	0
+ 2501 01fe 03       		.uleb128 0x3
+ 2502 01ff 0E       		.uleb128 0xe
+ 2503 0200 3A       		.uleb128 0x3a
+ 2504 0201 0B       		.uleb128 0xb
+ 2505 0202 3B       		.uleb128 0x3b
+ 2506 0203 05       		.uleb128 0x5
+ 2507 0204 49       		.uleb128 0x49
+ 2508 0205 13       		.uleb128 0x13
+ 2509 0206 02       		.uleb128 0x2
+ 2510 0207 0A       		.uleb128 0xa
+ 2511 0208 00       		.byte	0
+ 2512 0209 00       		.byte	0
+ 2513 020a 27       		.uleb128 0x27
+ 2514 020b 34       		.uleb128 0x34
+ 2515 020c 00       		.byte	0
+ 2516 020d 03       		.uleb128 0x3
+ 2517 020e 0E       		.uleb128 0xe
+ 2518 020f 3A       		.uleb128 0x3a
+ 2519 0210 0B       		.uleb128 0xb
+ 2520 0211 3B       		.uleb128 0x3b
+ 2521 0212 05       		.uleb128 0x5
+ 2522 0213 49       		.uleb128 0x49
+ 2523 0214 13       		.uleb128 0x13
+ 2524 0215 02       		.uleb128 0x2
+ 2525 0216 0A       		.uleb128 0xa
+ 2526 0217 00       		.byte	0
+ 2527 0218 00       		.byte	0
+ 2528 0219 28       		.uleb128 0x28
+ 2529 021a 34       		.uleb128 0x34
+ 2530 021b 00       		.byte	0
+ 2531 021c 03       		.uleb128 0x3
+ 2532 021d 0E       		.uleb128 0xe
+ 2533 021e 3A       		.uleb128 0x3a
+ 2534 021f 0B       		.uleb128 0xb
+ 2535 0220 3B       		.uleb128 0x3b
+ 2536 0221 05       		.uleb128 0x5
+ 2537 0222 49       		.uleb128 0x49
+ 2538 0223 13       		.uleb128 0x13
+ 2539 0224 02       		.uleb128 0x2
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 57
+
+
+ 2540 0225 06       		.uleb128 0x6
+ 2541 0226 00       		.byte	0
+ 2542 0227 00       		.byte	0
+ 2543 0228 29       		.uleb128 0x29
+ 2544 0229 34       		.uleb128 0x34
+ 2545 022a 00       		.byte	0
+ 2546 022b 03       		.uleb128 0x3
+ 2547 022c 08       		.uleb128 0x8
+ 2548 022d 3A       		.uleb128 0x3a
+ 2549 022e 0B       		.uleb128 0xb
+ 2550 022f 3B       		.uleb128 0x3b
+ 2551 0230 05       		.uleb128 0x5
+ 2552 0231 49       		.uleb128 0x49
+ 2553 0232 13       		.uleb128 0x13
+ 2554 0233 02       		.uleb128 0x2
+ 2555 0234 0A       		.uleb128 0xa
+ 2556 0235 00       		.byte	0
+ 2557 0236 00       		.byte	0
+ 2558 0237 2A       		.uleb128 0x2a
+ 2559 0238 05       		.uleb128 0x5
+ 2560 0239 00       		.byte	0
+ 2561 023a 03       		.uleb128 0x3
+ 2562 023b 08       		.uleb128 0x8
+ 2563 023c 3A       		.uleb128 0x3a
+ 2564 023d 0B       		.uleb128 0xb
+ 2565 023e 3B       		.uleb128 0x3b
+ 2566 023f 05       		.uleb128 0x5
+ 2567 0240 49       		.uleb128 0x49
+ 2568 0241 13       		.uleb128 0x13
+ 2569 0242 02       		.uleb128 0x2
+ 2570 0243 0A       		.uleb128 0xa
+ 2571 0244 00       		.byte	0
+ 2572 0245 00       		.byte	0
+ 2573 0246 2B       		.uleb128 0x2b
+ 2574 0247 18       		.uleb128 0x18
+ 2575 0248 00       		.byte	0
+ 2576 0249 00       		.byte	0
+ 2577 024a 00       		.byte	0
+ 2578 024b 2C       		.uleb128 0x2c
+ 2579 024c 1D       		.uleb128 0x1d
+ 2580 024d 01       		.byte	0x1
+ 2581 024e 31       		.uleb128 0x31
+ 2582 024f 13       		.uleb128 0x13
+ 2583 0250 11       		.uleb128 0x11
+ 2584 0251 01       		.uleb128 0x1
+ 2585 0252 12       		.uleb128 0x12
+ 2586 0253 01       		.uleb128 0x1
+ 2587 0254 58       		.uleb128 0x58
+ 2588 0255 0B       		.uleb128 0xb
+ 2589 0256 59       		.uleb128 0x59
+ 2590 0257 05       		.uleb128 0x5
+ 2591 0258 00       		.byte	0
+ 2592 0259 00       		.byte	0
+ 2593 025a 2D       		.uleb128 0x2d
+ 2594 025b 0B       		.uleb128 0xb
+ 2595 025c 01       		.byte	0x1
+ 2596 025d 11       		.uleb128 0x11
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 58
+
+
+ 2597 025e 01       		.uleb128 0x1
+ 2598 025f 12       		.uleb128 0x12
+ 2599 0260 01       		.uleb128 0x1
+ 2600 0261 00       		.byte	0
+ 2601 0262 00       		.byte	0
+ 2602 0263 2E       		.uleb128 0x2e
+ 2603 0264 34       		.uleb128 0x34
+ 2604 0265 00       		.byte	0
+ 2605 0266 31       		.uleb128 0x31
+ 2606 0267 13       		.uleb128 0x13
+ 2607 0268 00       		.byte	0
+ 2608 0269 00       		.byte	0
+ 2609 026a 2F       		.uleb128 0x2f
+ 2610 026b 0A       		.uleb128 0xa
+ 2611 026c 00       		.byte	0
+ 2612 026d 31       		.uleb128 0x31
+ 2613 026e 13       		.uleb128 0x13
+ 2614 026f 00       		.byte	0
+ 2615 0270 00       		.byte	0
+ 2616 0271 30       		.uleb128 0x30
+ 2617 0272 1D       		.uleb128 0x1d
+ 2618 0273 01       		.byte	0x1
+ 2619 0274 31       		.uleb128 0x31
+ 2620 0275 13       		.uleb128 0x13
+ 2621 0276 11       		.uleb128 0x11
+ 2622 0277 01       		.uleb128 0x1
+ 2623 0278 12       		.uleb128 0x12
+ 2624 0279 01       		.uleb128 0x1
+ 2625 027a 58       		.uleb128 0x58
+ 2626 027b 0B       		.uleb128 0xb
+ 2627 027c 59       		.uleb128 0x59
+ 2628 027d 0B       		.uleb128 0xb
+ 2629 027e 01       		.uleb128 0x1
+ 2630 027f 13       		.uleb128 0x13
+ 2631 0280 00       		.byte	0
+ 2632 0281 00       		.byte	0
+ 2633 0282 31       		.uleb128 0x31
+ 2634 0283 898201   		.uleb128 0x4109
+ 2635 0286 01       		.byte	0x1
+ 2636 0287 11       		.uleb128 0x11
+ 2637 0288 01       		.uleb128 0x1
+ 2638 0289 31       		.uleb128 0x31
+ 2639 028a 13       		.uleb128 0x13
+ 2640 028b 00       		.byte	0
+ 2641 028c 00       		.byte	0
+ 2642 028d 32       		.uleb128 0x32
+ 2643 028e 2E       		.uleb128 0x2e
+ 2644 028f 00       		.byte	0
+ 2645 0290 3F       		.uleb128 0x3f
+ 2646 0291 0C       		.uleb128 0xc
+ 2647 0292 03       		.uleb128 0x3
+ 2648 0293 0E       		.uleb128 0xe
+ 2649 0294 3A       		.uleb128 0x3a
+ 2650 0295 0B       		.uleb128 0xb
+ 2651 0296 3B       		.uleb128 0x3b
+ 2652 0297 05       		.uleb128 0x5
+ 2653 0298 27       		.uleb128 0x27
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 59
+
+
+ 2654 0299 0C       		.uleb128 0xc
+ 2655 029a 49       		.uleb128 0x49
+ 2656 029b 13       		.uleb128 0x13
+ 2657 029c 11       		.uleb128 0x11
+ 2658 029d 01       		.uleb128 0x1
+ 2659 029e 12       		.uleb128 0x12
+ 2660 029f 01       		.uleb128 0x1
+ 2661 02a0 40       		.uleb128 0x40
+ 2662 02a1 0A       		.uleb128 0xa
+ 2663 02a2 9742     		.uleb128 0x2117
+ 2664 02a4 0C       		.uleb128 0xc
+ 2665 02a5 00       		.byte	0
+ 2666 02a6 00       		.byte	0
+ 2667 02a7 33       		.uleb128 0x33
+ 2668 02a8 2E       		.uleb128 0x2e
+ 2669 02a9 01       		.byte	0x1
+ 2670 02aa 3F       		.uleb128 0x3f
+ 2671 02ab 0C       		.uleb128 0xc
+ 2672 02ac 03       		.uleb128 0x3
+ 2673 02ad 0E       		.uleb128 0xe
+ 2674 02ae 3A       		.uleb128 0x3a
+ 2675 02af 0B       		.uleb128 0xb
+ 2676 02b0 3B       		.uleb128 0x3b
+ 2677 02b1 05       		.uleb128 0x5
+ 2678 02b2 27       		.uleb128 0x27
+ 2679 02b3 0C       		.uleb128 0xc
+ 2680 02b4 49       		.uleb128 0x49
+ 2681 02b5 13       		.uleb128 0x13
+ 2682 02b6 11       		.uleb128 0x11
+ 2683 02b7 01       		.uleb128 0x1
+ 2684 02b8 12       		.uleb128 0x12
+ 2685 02b9 01       		.uleb128 0x1
+ 2686 02ba 40       		.uleb128 0x40
+ 2687 02bb 0A       		.uleb128 0xa
+ 2688 02bc 9742     		.uleb128 0x2117
+ 2689 02be 0C       		.uleb128 0xc
+ 2690 02bf 01       		.uleb128 0x1
+ 2691 02c0 13       		.uleb128 0x13
+ 2692 02c1 00       		.byte	0
+ 2693 02c2 00       		.byte	0
+ 2694 02c3 34       		.uleb128 0x34
+ 2695 02c4 898201   		.uleb128 0x4109
+ 2696 02c7 01       		.byte	0x1
+ 2697 02c8 11       		.uleb128 0x11
+ 2698 02c9 01       		.uleb128 0x1
+ 2699 02ca 9542     		.uleb128 0x2115
+ 2700 02cc 0C       		.uleb128 0xc
+ 2701 02cd 31       		.uleb128 0x31
+ 2702 02ce 13       		.uleb128 0x13
+ 2703 02cf 00       		.byte	0
+ 2704 02d0 00       		.byte	0
+ 2705 02d1 35       		.uleb128 0x35
+ 2706 02d2 2E       		.uleb128 0x2e
+ 2707 02d3 01       		.byte	0x1
+ 2708 02d4 3F       		.uleb128 0x3f
+ 2709 02d5 0C       		.uleb128 0xc
+ 2710 02d6 03       		.uleb128 0x3
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 60
+
+
+ 2711 02d7 0E       		.uleb128 0xe
+ 2712 02d8 3A       		.uleb128 0x3a
+ 2713 02d9 0B       		.uleb128 0xb
+ 2714 02da 3B       		.uleb128 0x3b
+ 2715 02db 05       		.uleb128 0x5
+ 2716 02dc 27       		.uleb128 0x27
+ 2717 02dd 0C       		.uleb128 0xc
+ 2718 02de 49       		.uleb128 0x49
+ 2719 02df 13       		.uleb128 0x13
+ 2720 02e0 11       		.uleb128 0x11
+ 2721 02e1 01       		.uleb128 0x1
+ 2722 02e2 12       		.uleb128 0x12
+ 2723 02e3 01       		.uleb128 0x1
+ 2724 02e4 40       		.uleb128 0x40
+ 2725 02e5 06       		.uleb128 0x6
+ 2726 02e6 9742     		.uleb128 0x2117
+ 2727 02e8 0C       		.uleb128 0xc
+ 2728 02e9 01       		.uleb128 0x1
+ 2729 02ea 13       		.uleb128 0x13
+ 2730 02eb 00       		.byte	0
+ 2731 02ec 00       		.byte	0
+ 2732 02ed 36       		.uleb128 0x36
+ 2733 02ee 34       		.uleb128 0x34
+ 2734 02ef 00       		.byte	0
+ 2735 02f0 03       		.uleb128 0x3
+ 2736 02f1 08       		.uleb128 0x8
+ 2737 02f2 3A       		.uleb128 0x3a
+ 2738 02f3 0B       		.uleb128 0xb
+ 2739 02f4 3B       		.uleb128 0x3b
+ 2740 02f5 05       		.uleb128 0x5
+ 2741 02f6 49       		.uleb128 0x49
+ 2742 02f7 13       		.uleb128 0x13
+ 2743 02f8 02       		.uleb128 0x2
+ 2744 02f9 06       		.uleb128 0x6
+ 2745 02fa 00       		.byte	0
+ 2746 02fb 00       		.byte	0
+ 2747 02fc 37       		.uleb128 0x37
+ 2748 02fd 2E       		.uleb128 0x2e
+ 2749 02fe 00       		.byte	0
+ 2750 02ff 3F       		.uleb128 0x3f
+ 2751 0300 0C       		.uleb128 0xc
+ 2752 0301 3C       		.uleb128 0x3c
+ 2753 0302 0C       		.uleb128 0xc
+ 2754 0303 8740     		.uleb128 0x2007
+ 2755 0305 0E       		.uleb128 0xe
+ 2756 0306 03       		.uleb128 0x3
+ 2757 0307 0E       		.uleb128 0xe
+ 2758 0308 00       		.byte	0
+ 2759 0309 00       		.byte	0
+ 2760 030a 38       		.uleb128 0x38
+ 2761 030b 2E       		.uleb128 0x2e
+ 2762 030c 00       		.byte	0
+ 2763 030d 3F       		.uleb128 0x3f
+ 2764 030e 0C       		.uleb128 0xc
+ 2765 030f 3C       		.uleb128 0x3c
+ 2766 0310 0C       		.uleb128 0xc
+ 2767 0311 8740     		.uleb128 0x2007
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 61
+
+
+ 2768 0313 0E       		.uleb128 0xe
+ 2769 0314 03       		.uleb128 0x3
+ 2770 0315 0E       		.uleb128 0xe
+ 2771 0316 3A       		.uleb128 0x3a
+ 2772 0317 0B       		.uleb128 0xb
+ 2773 0318 3B       		.uleb128 0x3b
+ 2774 0319 0B       		.uleb128 0xb
+ 2775 031a 00       		.byte	0
+ 2776 031b 00       		.byte	0
+ 2777 031c 00       		.byte	0
+ 2778              		.section	.debug_loc,"",%progbits
+ 2779              	.Ldebug_loc0:
+ 2780              	.LLST0:
+ 2781 0000 70000000 		.4byte	.LFB4-.Ltext0
+ 2782 0004 80000000 		.4byte	.LCFI0-.Ltext0
+ 2783 0008 0200     		.2byte	0x2
+ 2784 000a 7D       		.byte	0x7d
+ 2785 000b 00       		.sleb128 0
+ 2786 000c 80000000 		.4byte	.LCFI0-.Ltext0
+ 2787 0010 90000000 		.4byte	.LCFI1-.Ltext0
+ 2788 0014 0200     		.2byte	0x2
+ 2789 0016 7D       		.byte	0x7d
+ 2790 0017 08       		.sleb128 8
+ 2791 0018 90000000 		.4byte	.LCFI1-.Ltext0
+ 2792 001c 94000000 		.4byte	.LFE4-.Ltext0
+ 2793 0020 0200     		.2byte	0x2
+ 2794 0022 7D       		.byte	0x7d
+ 2795 0023 00       		.sleb128 0
+ 2796 0024 00000000 		.4byte	0
+ 2797 0028 00000000 		.4byte	0
+ 2798              	.LLST1:
+ 2799 002c 70000000 		.4byte	.LVL1-.Ltext0
+ 2800 0030 84000000 		.4byte	.LVL2-.Ltext0
+ 2801 0034 0100     		.2byte	0x1
+ 2802 0036 50       		.byte	0x50
+ 2803 0037 84000000 		.4byte	.LVL2-.Ltext0
+ 2804 003b 94000000 		.4byte	.LFE4-.Ltext0
+ 2805 003f 0400     		.2byte	0x4
+ 2806 0041 F3       		.byte	0xf3
+ 2807 0042 01       		.uleb128 0x1
+ 2808 0043 50       		.byte	0x50
+ 2809 0044 9F       		.byte	0x9f
+ 2810 0045 00000000 		.4byte	0
+ 2811 0049 00000000 		.4byte	0
+ 2812              	.LLST2:
+ 2813 004d 94000000 		.4byte	.LFB13-.Ltext0
+ 2814 0051 98000000 		.4byte	.LCFI2-.Ltext0
+ 2815 0055 0200     		.2byte	0x2
+ 2816 0057 7D       		.byte	0x7d
+ 2817 0058 00       		.sleb128 0
+ 2818 0059 98000000 		.4byte	.LCFI2-.Ltext0
+ 2819 005d 9C000000 		.4byte	.LCFI3-.Ltext0
+ 2820 0061 0200     		.2byte	0x2
+ 2821 0063 7D       		.byte	0x7d
+ 2822 0064 14       		.sleb128 20
+ 2823 0065 9C000000 		.4byte	.LCFI3-.Ltext0
+ 2824 0069 00010000 		.4byte	.LCFI4-.Ltext0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 62
+
+
+ 2825 006d 0300     		.2byte	0x3
+ 2826 006f 7D       		.byte	0x7d
+ 2827 0070 D000     		.sleb128 80
+ 2828 0072 00010000 		.4byte	.LCFI4-.Ltext0
+ 2829 0076 04010000 		.4byte	.LCFI5-.Ltext0
+ 2830 007a 0200     		.2byte	0x2
+ 2831 007c 7D       		.byte	0x7d
+ 2832 007d 14       		.sleb128 20
+ 2833 007e 04010000 		.4byte	.LCFI5-.Ltext0
+ 2834 0082 0C010000 		.4byte	.LFE13-.Ltext0
+ 2835 0086 0200     		.2byte	0x2
+ 2836 0088 7D       		.byte	0x7d
+ 2837 0089 00       		.sleb128 0
+ 2838 008a 00000000 		.4byte	0
+ 2839 008e 00000000 		.4byte	0
+ 2840              	.LLST3:
+ 2841 0092 94000000 		.4byte	.LVL5-.Ltext0
+ 2842 0096 B0000000 		.4byte	.LVL7-.Ltext0
+ 2843 009a 0100     		.2byte	0x1
+ 2844 009c 50       		.byte	0x50
+ 2845 009d B0000000 		.4byte	.LVL7-.Ltext0
+ 2846 00a1 E4000000 		.4byte	.LVL12-.Ltext0
+ 2847 00a5 0100     		.2byte	0x1
+ 2848 00a7 55       		.byte	0x55
+ 2849 00a8 E4000000 		.4byte	.LVL12-.Ltext0
+ 2850 00ac EC000000 		.4byte	.LVL13-.Ltext0
+ 2851 00b0 0100     		.2byte	0x1
+ 2852 00b2 50       		.byte	0x50
+ 2853 00b3 EC000000 		.4byte	.LVL13-.Ltext0
+ 2854 00b7 04010000 		.4byte	.LVL16-.Ltext0
+ 2855 00bb 0100     		.2byte	0x1
+ 2856 00bd 55       		.byte	0x55
+ 2857 00be 00000000 		.4byte	0
+ 2858 00c2 00000000 		.4byte	0
+ 2859              	.LLST4:
+ 2860 00c6 94000000 		.4byte	.LVL5-.Ltext0
+ 2861 00ca AC000000 		.4byte	.LVL6-.Ltext0
+ 2862 00ce 0100     		.2byte	0x1
+ 2863 00d0 51       		.byte	0x51
+ 2864 00d1 AC000000 		.4byte	.LVL6-.Ltext0
+ 2865 00d5 04010000 		.4byte	.LVL16-.Ltext0
+ 2866 00d9 0100     		.2byte	0x1
+ 2867 00db 56       		.byte	0x56
+ 2868 00dc 04010000 		.4byte	.LVL16-.Ltext0
+ 2869 00e0 0C010000 		.4byte	.LFE13-.Ltext0
+ 2870 00e4 0400     		.2byte	0x4
+ 2871 00e6 F3       		.byte	0xf3
+ 2872 00e7 01       		.uleb128 0x1
+ 2873 00e8 51       		.byte	0x51
+ 2874 00e9 9F       		.byte	0x9f
+ 2875 00ea 00000000 		.4byte	0
+ 2876 00ee 00000000 		.4byte	0
+ 2877              	.LLST5:
+ 2878 00f2 B8000000 		.4byte	.LVL8-.Ltext0
+ 2879 00f6 E0000000 		.4byte	.LVL11-.Ltext0
+ 2880 00fa 0100     		.2byte	0x1
+ 2881 00fc 54       		.byte	0x54
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 63
+
+
+ 2882 00fd E0000000 		.4byte	.LVL11-.Ltext0
+ 2883 0101 EC000000 		.4byte	.LVL13-.Ltext0
+ 2884 0105 0300     		.2byte	0x3
+ 2885 0107 74       		.byte	0x74
+ 2886 0108 7F       		.sleb128 -1
+ 2887 0109 9F       		.byte	0x9f
+ 2888 010a EC000000 		.4byte	.LVL13-.Ltext0
+ 2889 010e F0000000 		.4byte	.LVL14-.Ltext0
+ 2890 0112 0100     		.2byte	0x1
+ 2891 0114 54       		.byte	0x54
+ 2892 0115 F0000000 		.4byte	.LVL14-.Ltext0
+ 2893 0119 04010000 		.4byte	.LVL16-.Ltext0
+ 2894 011d 0300     		.2byte	0x3
+ 2895 011f 74       		.byte	0x74
+ 2896 0120 01       		.sleb128 1
+ 2897 0121 9F       		.byte	0x9f
+ 2898 0122 00000000 		.4byte	0
+ 2899 0126 00000000 		.4byte	0
+ 2900              	.LLST6:
+ 2901 012a 0C010000 		.4byte	.LFB5-.Ltext0
+ 2902 012e 10010000 		.4byte	.LCFI6-.Ltext0
+ 2903 0132 0200     		.2byte	0x2
+ 2904 0134 7D       		.byte	0x7d
+ 2905 0135 00       		.sleb128 0
+ 2906 0136 10010000 		.4byte	.LCFI6-.Ltext0
+ 2907 013a 2C010000 		.4byte	.LCFI7-.Ltext0
+ 2908 013e 0200     		.2byte	0x2
+ 2909 0140 7D       		.byte	0x7d
+ 2910 0141 08       		.sleb128 8
+ 2911 0142 2C010000 		.4byte	.LCFI7-.Ltext0
+ 2912 0146 30010000 		.4byte	.LFE5-.Ltext0
+ 2913 014a 0200     		.2byte	0x2
+ 2914 014c 7D       		.byte	0x7d
+ 2915 014d 00       		.sleb128 0
+ 2916 014e 00000000 		.4byte	0
+ 2917 0152 00000000 		.4byte	0
+ 2918              	.LLST7:
+ 2919 0156 0C010000 		.4byte	.LVL17-.Ltext0
+ 2920 015a 14010000 		.4byte	.LVL18-.Ltext0
+ 2921 015e 0100     		.2byte	0x1
+ 2922 0160 50       		.byte	0x50
+ 2923 0161 14010000 		.4byte	.LVL18-.Ltext0
+ 2924 0165 18010000 		.4byte	.LVL19-.Ltext0
+ 2925 0169 0300     		.2byte	0x3
+ 2926 016b 74       		.byte	0x74
+ 2927 016c 01       		.sleb128 1
+ 2928 016d 9F       		.byte	0x9f
+ 2929 016e 18010000 		.4byte	.LVL19-.Ltext0
+ 2930 0172 20010000 		.4byte	.LVL20-.Ltext0
+ 2931 0176 0100     		.2byte	0x1
+ 2932 0178 54       		.byte	0x54
+ 2933 0179 20010000 		.4byte	.LVL20-.Ltext0
+ 2934 017d 28010000 		.4byte	.LVL22-.Ltext0
+ 2935 0181 0300     		.2byte	0x3
+ 2936 0183 74       		.byte	0x74
+ 2937 0184 01       		.sleb128 1
+ 2938 0185 9F       		.byte	0x9f
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 64
+
+
+ 2939 0186 28010000 		.4byte	.LVL22-.Ltext0
+ 2940 018a 2C010000 		.4byte	.LVL23-.Ltext0
+ 2941 018e 0100     		.2byte	0x1
+ 2942 0190 54       		.byte	0x54
+ 2943 0191 00000000 		.4byte	0
+ 2944 0195 00000000 		.4byte	0
+ 2945              	.LLST8:
+ 2946 0199 30010000 		.4byte	.LFB6-.Ltext0
+ 2947 019d 34010000 		.4byte	.LCFI8-.Ltext0
+ 2948 01a1 0200     		.2byte	0x2
+ 2949 01a3 7D       		.byte	0x7d
+ 2950 01a4 00       		.sleb128 0
+ 2951 01a5 34010000 		.4byte	.LCFI8-.Ltext0
+ 2952 01a9 44010000 		.4byte	.LCFI9-.Ltext0
+ 2953 01ad 0200     		.2byte	0x2
+ 2954 01af 7D       		.byte	0x7d
+ 2955 01b0 24       		.sleb128 36
+ 2956 01b1 44010000 		.4byte	.LCFI9-.Ltext0
+ 2957 01b5 24020000 		.4byte	.LCFI10-.Ltext0
+ 2958 01b9 0300     		.2byte	0x3
+ 2959 01bb 7D       		.byte	0x7d
+ 2960 01bc D000     		.sleb128 80
+ 2961 01be 24020000 		.4byte	.LCFI10-.Ltext0
+ 2962 01c2 28020000 		.4byte	.LCFI11-.Ltext0
+ 2963 01c6 0200     		.2byte	0x2
+ 2964 01c8 7D       		.byte	0x7d
+ 2965 01c9 24       		.sleb128 36
+ 2966 01ca 28020000 		.4byte	.LCFI11-.Ltext0
+ 2967 01ce 30020000 		.4byte	.LFE6-.Ltext0
+ 2968 01d2 0200     		.2byte	0x2
+ 2969 01d4 7D       		.byte	0x7d
+ 2970 01d5 00       		.sleb128 0
+ 2971 01d6 00000000 		.4byte	0
+ 2972 01da 00000000 		.4byte	0
+ 2973              	.LLST9:
+ 2974 01de 30010000 		.4byte	.LVL24-.Ltext0
+ 2975 01e2 3C010000 		.4byte	.LVL25-.Ltext0
+ 2976 01e6 0100     		.2byte	0x1
+ 2977 01e8 50       		.byte	0x50
+ 2978 01e9 3C010000 		.4byte	.LVL25-.Ltext0
+ 2979 01ed 30020000 		.4byte	.LFE6-.Ltext0
+ 2980 01f1 0400     		.2byte	0x4
+ 2981 01f3 F3       		.byte	0xf3
+ 2982 01f4 01       		.uleb128 0x1
+ 2983 01f5 50       		.byte	0x50
+ 2984 01f6 9F       		.byte	0x9f
+ 2985 01f7 00000000 		.4byte	0
+ 2986 01fb 00000000 		.4byte	0
+ 2987              	.LLST10:
+ 2988 01ff 30010000 		.4byte	.LVL24-.Ltext0
+ 2989 0203 5C010000 		.4byte	.LVL27-.Ltext0
+ 2990 0207 0100     		.2byte	0x1
+ 2991 0209 51       		.byte	0x51
+ 2992 020a 5C010000 		.4byte	.LVL27-.Ltext0
+ 2993 020e 30020000 		.4byte	.LFE6-.Ltext0
+ 2994 0212 0400     		.2byte	0x4
+ 2995 0214 F3       		.byte	0xf3
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 65
+
+
+ 2996 0215 01       		.uleb128 0x1
+ 2997 0216 51       		.byte	0x51
+ 2998 0217 9F       		.byte	0x9f
+ 2999 0218 00000000 		.4byte	0
+ 3000 021c 00000000 		.4byte	0
+ 3001              	.LLST11:
+ 3002 0220 30010000 		.4byte	.LVL24-.Ltext0
+ 3003 0224 7B010000 		.4byte	.LVL31-1-.Ltext0
+ 3004 0228 0100     		.2byte	0x1
+ 3005 022a 52       		.byte	0x52
+ 3006 022b 7B010000 		.4byte	.LVL31-1-.Ltext0
+ 3007 022f 30020000 		.4byte	.LFE6-.Ltext0
+ 3008 0233 0400     		.2byte	0x4
+ 3009 0235 F3       		.byte	0xf3
+ 3010 0236 01       		.uleb128 0x1
+ 3011 0237 52       		.byte	0x52
+ 3012 0238 9F       		.byte	0x9f
+ 3013 0239 00000000 		.4byte	0
+ 3014 023d 00000000 		.4byte	0
+ 3015              	.LLST12:
+ 3016 0241 30010000 		.4byte	.LVL24-.Ltext0
+ 3017 0245 50010000 		.4byte	.LVL26-.Ltext0
+ 3018 0249 0100     		.2byte	0x1
+ 3019 024b 53       		.byte	0x53
+ 3020 024c 50010000 		.4byte	.LVL26-.Ltext0
+ 3021 0250 30020000 		.4byte	.LFE6-.Ltext0
+ 3022 0254 0400     		.2byte	0x4
+ 3023 0256 F3       		.byte	0xf3
+ 3024 0257 01       		.uleb128 0x1
+ 3025 0258 53       		.byte	0x53
+ 3026 0259 9F       		.byte	0x9f
+ 3027 025a 00000000 		.4byte	0
+ 3028 025e 00000000 		.4byte	0
+ 3029              	.LLST13:
+ 3030 0262 68010000 		.4byte	.LVL29-.Ltext0
+ 3031 0266 78010000 		.4byte	.LVL30-.Ltext0
+ 3032 026a 0300     		.2byte	0x3
+ 3033 026c 91       		.byte	0x91
+ 3034 026d 4F       		.sleb128 -49
+ 3035 026e 9F       		.byte	0x9f
+ 3036 026f 78010000 		.4byte	.LVL30-.Ltext0
+ 3037 0273 A0010000 		.4byte	.LVL35-.Ltext0
+ 3038 0277 0300     		.2byte	0x3
+ 3039 0279 91       		.byte	0x91
+ 3040 027a 4E       		.sleb128 -50
+ 3041 027b 9F       		.byte	0x9f
+ 3042 027c A0010000 		.4byte	.LVL35-.Ltext0
+ 3043 0280 C0010000 		.4byte	.LVL38-.Ltext0
+ 3044 0284 0300     		.2byte	0x3
+ 3045 0286 79       		.byte	0x79
+ 3046 0287 01       		.sleb128 1
+ 3047 0288 9F       		.byte	0x9f
+ 3048 0289 C0010000 		.4byte	.LVL38-.Ltext0
+ 3049 028d E4010000 		.4byte	.LVL41-.Ltext0
+ 3050 0291 0100     		.2byte	0x1
+ 3051 0293 59       		.byte	0x59
+ 3052 0294 EC010000 		.4byte	.LVL42-.Ltext0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 66
+
+
+ 3053 0298 0C020000 		.4byte	.LVL44-.Ltext0
+ 3054 029c 0300     		.2byte	0x3
+ 3055 029e 79       		.byte	0x79
+ 3056 029f 01       		.sleb128 1
+ 3057 02a0 9F       		.byte	0x9f
+ 3058 02a1 0C020000 		.4byte	.LVL44-.Ltext0
+ 3059 02a5 14020000 		.4byte	.LVL45-.Ltext0
+ 3060 02a9 0100     		.2byte	0x1
+ 3061 02ab 53       		.byte	0x53
+ 3062 02ac 1C020000 		.4byte	.LVL46-.Ltext0
+ 3063 02b0 1F020000 		.4byte	.LVL47-1-.Ltext0
+ 3064 02b4 0100     		.2byte	0x1
+ 3065 02b6 50       		.byte	0x50
+ 3066 02b7 00000000 		.4byte	0
+ 3067 02bb 00000000 		.4byte	0
+ 3068              	.LLST14:
+ 3069 02bf 60010000 		.4byte	.LVL28-.Ltext0
+ 3070 02c3 98010000 		.4byte	.LVL33-.Ltext0
+ 3071 02c7 0100     		.2byte	0x1
+ 3072 02c9 55       		.byte	0x55
+ 3073 02ca 9C010000 		.4byte	.LVL34-.Ltext0
+ 3074 02ce CB010000 		.4byte	.LVL39-1-.Ltext0
+ 3075 02d2 0100     		.2byte	0x1
+ 3076 02d4 50       		.byte	0x50
+ 3077 02d5 CB010000 		.4byte	.LVL39-1-.Ltext0
+ 3078 02d9 E4010000 		.4byte	.LVL41-.Ltext0
+ 3079 02dd 0100     		.2byte	0x1
+ 3080 02df 5A       		.byte	0x5a
+ 3081 02e0 E4010000 		.4byte	.LVL41-.Ltext0
+ 3082 02e4 F0010000 		.4byte	.LVL43-.Ltext0
+ 3083 02e8 0100     		.2byte	0x1
+ 3084 02ea 50       		.byte	0x50
+ 3085 02eb F0010000 		.4byte	.LVL43-.Ltext0
+ 3086 02ef 28020000 		.4byte	.LVL48-.Ltext0
+ 3087 02f3 0100     		.2byte	0x1
+ 3088 02f5 5A       		.byte	0x5a
+ 3089 02f6 00000000 		.4byte	0
+ 3090 02fa 00000000 		.4byte	0
+ 3091              	.LLST15:
+ 3092 02fe 68010000 		.4byte	.LVL29-.Ltext0
+ 3093 0302 A0010000 		.4byte	.LVL35-.Ltext0
+ 3094 0306 0100     		.2byte	0x1
+ 3095 0308 54       		.byte	0x54
+ 3096 0309 A0010000 		.4byte	.LVL35-.Ltext0
+ 3097 030d A4010000 		.4byte	.LVL36-.Ltext0
+ 3098 0311 0100     		.2byte	0x1
+ 3099 0313 55       		.byte	0x55
+ 3100 0314 A8010000 		.4byte	.LVL37-.Ltext0
+ 3101 0318 28020000 		.4byte	.LVL48-.Ltext0
+ 3102 031c 0100     		.2byte	0x1
+ 3103 031e 55       		.byte	0x55
+ 3104 031f 00000000 		.4byte	0
+ 3105 0323 00000000 		.4byte	0
+ 3106              	.LLST16:
+ 3107 0327 30020000 		.4byte	.LFB7-.Ltext0
+ 3108 032b 34020000 		.4byte	.LCFI12-.Ltext0
+ 3109 032f 0200     		.2byte	0x2
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 67
+
+
+ 3110 0331 7D       		.byte	0x7d
+ 3111 0332 00       		.sleb128 0
+ 3112 0333 34020000 		.4byte	.LCFI12-.Ltext0
+ 3113 0337 38020000 		.4byte	.LCFI13-.Ltext0
+ 3114 033b 0200     		.2byte	0x2
+ 3115 033d 7D       		.byte	0x7d
+ 3116 033e 10       		.sleb128 16
+ 3117 033f 38020000 		.4byte	.LCFI13-.Ltext0
+ 3118 0343 88030000 		.4byte	.LCFI14-.Ltext0
+ 3119 0347 0200     		.2byte	0x2
+ 3120 0349 7D       		.byte	0x7d
+ 3121 034a 28       		.sleb128 40
+ 3122 034b 88030000 		.4byte	.LCFI14-.Ltext0
+ 3123 034f 8C030000 		.4byte	.LCFI15-.Ltext0
+ 3124 0353 0200     		.2byte	0x2
+ 3125 0355 7D       		.byte	0x7d
+ 3126 0356 20       		.sleb128 32
+ 3127 0357 8C030000 		.4byte	.LCFI15-.Ltext0
+ 3128 035b 90030000 		.4byte	.LCFI16-.Ltext0
+ 3129 035f 0200     		.2byte	0x2
+ 3130 0361 7D       		.byte	0x7d
+ 3131 0362 10       		.sleb128 16
+ 3132 0363 90030000 		.4byte	.LCFI16-.Ltext0
+ 3133 0367 94030000 		.4byte	.LFE7-.Ltext0
+ 3134 036b 0200     		.2byte	0x2
+ 3135 036d 7D       		.byte	0x7d
+ 3136 036e 00       		.sleb128 0
+ 3137 036f 00000000 		.4byte	0
+ 3138 0373 00000000 		.4byte	0
+ 3139              	.LLST17:
+ 3140 0377 EC020000 		.4byte	.LVL60-.Ltext0
+ 3141 037b F0020000 		.4byte	.LVL61-.Ltext0
+ 3142 037f 0300     		.2byte	0x3
+ 3143 0381 55       		.byte	0x55
+ 3144 0382 93       		.byte	0x93
+ 3145 0383 04       		.uleb128 0x4
+ 3146 0384 FC020000 		.4byte	.LVL64-.Ltext0
+ 3147 0388 14030000 		.4byte	.LVL68-.Ltext0
+ 3148 038c 0300     		.2byte	0x3
+ 3149 038e 55       		.byte	0x55
+ 3150 038f 93       		.byte	0x93
+ 3151 0390 04       		.uleb128 0x4
+ 3152 0391 1C030000 		.4byte	.LVL69-.Ltext0
+ 3153 0395 3C030000 		.4byte	.LVL73-.Ltext0
+ 3154 0399 0300     		.2byte	0x3
+ 3155 039b 55       		.byte	0x55
+ 3156 039c 93       		.byte	0x93
+ 3157 039d 04       		.uleb128 0x4
+ 3158 039e 40030000 		.4byte	.LVL74-.Ltext0
+ 3159 03a2 48030000 		.4byte	.LVL76-.Ltext0
+ 3160 03a6 0300     		.2byte	0x3
+ 3161 03a8 55       		.byte	0x55
+ 3162 03a9 93       		.byte	0x93
+ 3163 03aa 04       		.uleb128 0x4
+ 3164 03ab 4C030000 		.4byte	.LVL77-.Ltext0
+ 3165 03af 54030000 		.4byte	.LVL79-.Ltext0
+ 3166 03b3 0300     		.2byte	0x3
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 68
+
+
+ 3167 03b5 55       		.byte	0x55
+ 3168 03b6 93       		.byte	0x93
+ 3169 03b7 04       		.uleb128 0x4
+ 3170 03b8 5C030000 		.4byte	.LVL80-.Ltext0
+ 3171 03bc 60030000 		.4byte	.LVL81-.Ltext0
+ 3172 03c0 0300     		.2byte	0x3
+ 3173 03c2 55       		.byte	0x55
+ 3174 03c3 93       		.byte	0x93
+ 3175 03c4 04       		.uleb128 0x4
+ 3176 03c5 00000000 		.4byte	0
+ 3177 03c9 00000000 		.4byte	0
+ 3178              	.LLST18:
+ 3179 03cd 44020000 		.4byte	.LVL50-.Ltext0
+ 3180 03d1 48020000 		.4byte	.LVL51-.Ltext0
+ 3181 03d5 0100     		.2byte	0x1
+ 3182 03d7 56       		.byte	0x56
+ 3183 03d8 48020000 		.4byte	.LVL51-.Ltext0
+ 3184 03dc 88020000 		.4byte	.LVL54-.Ltext0
+ 3185 03e0 0300     		.2byte	0x3
+ 3186 03e2 76       		.byte	0x76
+ 3187 03e3 7F       		.sleb128 -1
+ 3188 03e4 9F       		.byte	0x9f
+ 3189 03e5 88020000 		.4byte	.LVL54-.Ltext0
+ 3190 03e9 8C020000 		.4byte	.LVL55-.Ltext0
+ 3191 03ed 0100     		.2byte	0x1
+ 3192 03ef 56       		.byte	0x56
+ 3193 03f0 8C020000 		.4byte	.LVL55-.Ltext0
+ 3194 03f4 F4020000 		.4byte	.LVL62-.Ltext0
+ 3195 03f8 0300     		.2byte	0x3
+ 3196 03fa 76       		.byte	0x76
+ 3197 03fb 7F       		.sleb128 -1
+ 3198 03fc 9F       		.byte	0x9f
+ 3199 03fd F4020000 		.4byte	.LVL62-.Ltext0
+ 3200 0401 F8020000 		.4byte	.LVL63-.Ltext0
+ 3201 0405 0100     		.2byte	0x1
+ 3202 0407 56       		.byte	0x56
+ 3203 0408 F8020000 		.4byte	.LVL63-.Ltext0
+ 3204 040c 84030000 		.4byte	.LVL87-.Ltext0
+ 3205 0410 0300     		.2byte	0x3
+ 3206 0412 76       		.byte	0x76
+ 3207 0413 7F       		.sleb128 -1
+ 3208 0414 9F       		.byte	0x9f
+ 3209 0415 00000000 		.4byte	0
+ 3210 0419 00000000 		.4byte	0
+ 3211              	.LLST19:
+ 3212 041d 00030000 		.4byte	.LVL65-.Ltext0
+ 3213 0421 04030000 		.4byte	.LVL66-.Ltext0
+ 3214 0425 0100     		.2byte	0x1
+ 3215 0427 54       		.byte	0x54
+ 3216 0428 04030000 		.4byte	.LVL66-.Ltext0
+ 3217 042c 14030000 		.4byte	.LVL68-.Ltext0
+ 3218 0430 0300     		.2byte	0x3
+ 3219 0432 74       		.byte	0x74
+ 3220 0433 7F       		.sleb128 -1
+ 3221 0434 9F       		.byte	0x9f
+ 3222 0435 00000000 		.4byte	0
+ 3223 0439 00000000 		.4byte	0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 69
+
+
+ 3224              	.LLST20:
+ 3225 043d 48020000 		.4byte	.LVL51-.Ltext0
+ 3226 0441 5F020000 		.4byte	.LVL52-1-.Ltext0
+ 3227 0445 0100     		.2byte	0x1
+ 3228 0447 50       		.byte	0x50
+ 3229 0448 64020000 		.4byte	.LVL53-.Ltext0
+ 3230 044c 88020000 		.4byte	.LVL54-.Ltext0
+ 3231 0450 0100     		.2byte	0x1
+ 3232 0452 51       		.byte	0x51
+ 3233 0453 8C020000 		.4byte	.LVL55-.Ltext0
+ 3234 0457 BF020000 		.4byte	.LVL57-1-.Ltext0
+ 3235 045b 0100     		.2byte	0x1
+ 3236 045d 51       		.byte	0x51
+ 3237 045e CC020000 		.4byte	.LVL59-.Ltext0
+ 3238 0462 EC020000 		.4byte	.LVL60-.Ltext0
+ 3239 0466 0100     		.2byte	0x1
+ 3240 0468 51       		.byte	0x51
+ 3241 0469 EC020000 		.4byte	.LVL60-.Ltext0
+ 3242 046d EF020000 		.4byte	.LVL61-1-.Ltext0
+ 3243 0471 0200     		.2byte	0x2
+ 3244 0473 74       		.byte	0x74
+ 3245 0474 00       		.sleb128 0
+ 3246 0475 F8020000 		.4byte	.LVL63-.Ltext0
+ 3247 0479 00030000 		.4byte	.LVL65-.Ltext0
+ 3248 047d 0100     		.2byte	0x1
+ 3249 047f 51       		.byte	0x51
+ 3250 0480 04030000 		.4byte	.LVL66-.Ltext0
+ 3251 0484 0F030000 		.4byte	.LVL67-1-.Ltext0
+ 3252 0488 0100     		.2byte	0x1
+ 3253 048a 50       		.byte	0x50
+ 3254 048b 14030000 		.4byte	.LVL68-.Ltext0
+ 3255 048f 2B030000 		.4byte	.LVL71-1-.Ltext0
+ 3256 0493 0100     		.2byte	0x1
+ 3257 0495 51       		.byte	0x51
+ 3258 0496 3C030000 		.4byte	.LVL73-.Ltext0
+ 3259 049a 44030000 		.4byte	.LVL75-.Ltext0
+ 3260 049e 0100     		.2byte	0x1
+ 3261 04a0 51       		.byte	0x51
+ 3262 04a1 44030000 		.4byte	.LVL75-.Ltext0
+ 3263 04a5 48030000 		.4byte	.LVL76-.Ltext0
+ 3264 04a9 0200     		.2byte	0x2
+ 3265 04ab 76       		.byte	0x76
+ 3266 04ac 7F       		.sleb128 -1
+ 3267 04ad 48030000 		.4byte	.LVL76-.Ltext0
+ 3268 04b1 50030000 		.4byte	.LVL78-.Ltext0
+ 3269 04b5 0100     		.2byte	0x1
+ 3270 04b7 51       		.byte	0x51
+ 3271 04b8 50030000 		.4byte	.LVL78-.Ltext0
+ 3272 04bc 54030000 		.4byte	.LVL79-.Ltext0
+ 3273 04c0 0200     		.2byte	0x2
+ 3274 04c2 76       		.byte	0x76
+ 3275 04c3 7F       		.sleb128 -1
+ 3276 04c4 68030000 		.4byte	.LVL83-.Ltext0
+ 3277 04c8 73030000 		.4byte	.LVL85-1-.Ltext0
+ 3278 04cc 0100     		.2byte	0x1
+ 3279 04ce 51       		.byte	0x51
+ 3280 04cf 00000000 		.4byte	0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 70
+
+
+ 3281 04d3 00000000 		.4byte	0
+ 3282              	.LLST21:
+ 3283 04d7 1C030000 		.4byte	.LVL69-.Ltext0
+ 3284 04db 3C030000 		.4byte	.LVL73-.Ltext0
+ 3285 04df 0100     		.2byte	0x1
+ 3286 04e1 54       		.byte	0x54
+ 3287 04e2 40030000 		.4byte	.LVL74-.Ltext0
+ 3288 04e6 48030000 		.4byte	.LVL76-.Ltext0
+ 3289 04ea 0200     		.2byte	0x2
+ 3290 04ec 74       		.byte	0x74
+ 3291 04ed 00       		.sleb128 0
+ 3292 04ee 4C030000 		.4byte	.LVL77-.Ltext0
+ 3293 04f2 54030000 		.4byte	.LVL79-.Ltext0
+ 3294 04f6 0200     		.2byte	0x2
+ 3295 04f8 74       		.byte	0x74
+ 3296 04f9 00       		.sleb128 0
+ 3297 04fa 00000000 		.4byte	0
+ 3298 04fe 00000000 		.4byte	0
+ 3299              	.LLST22:
+ 3300 0502 B8020000 		.4byte	.LVL56-.Ltext0
+ 3301 0506 C0020000 		.4byte	.LVL57-.Ltext0
+ 3302 050a 0300     		.2byte	0x3
+ 3303 050c 08       		.byte	0x8
+ 3304 050d 30       		.byte	0x30
+ 3305 050e 9F       		.byte	0x9f
+ 3306 050f 00000000 		.4byte	0
+ 3307 0513 00000000 		.4byte	0
+ 3308              	.LLST23:
+ 3309 0517 C0020000 		.4byte	.LVL57-.Ltext0
+ 3310 051b CC020000 		.4byte	.LVL59-.Ltext0
+ 3311 051f 0300     		.2byte	0x3
+ 3312 0521 08       		.byte	0x8
+ 3313 0522 78       		.byte	0x78
+ 3314 0523 9F       		.byte	0x9f
+ 3315 0524 00000000 		.4byte	0
+ 3316 0528 00000000 		.4byte	0
+ 3317              	.LLST24:
+ 3318 052c 24030000 		.4byte	.LVL70-.Ltext0
+ 3319 0530 2C030000 		.4byte	.LVL71-.Ltext0
+ 3320 0534 0300     		.2byte	0x3
+ 3321 0536 08       		.byte	0x8
+ 3322 0537 2D       		.byte	0x2d
+ 3323 0538 9F       		.byte	0x9f
+ 3324 0539 00000000 		.4byte	0
+ 3325 053d 00000000 		.4byte	0
+ 3326              	.LLST25:
+ 3327 0541 6C030000 		.4byte	.LVL84-.Ltext0
+ 3328 0545 74030000 		.4byte	.LVL85-.Ltext0
+ 3329 0549 0300     		.2byte	0x3
+ 3330 054b 08       		.byte	0x8
+ 3331 054c 6C       		.byte	0x6c
+ 3332 054d 9F       		.byte	0x9f
+ 3333 054e 00000000 		.4byte	0
+ 3334 0552 00000000 		.4byte	0
+ 3335              	.LLST26:
+ 3336 0556 B8030000 		.4byte	.LVL88-.Ltext0
+ 3337 055a D0030000 		.4byte	.LVL89-.Ltext0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 71
+
+
+ 3338 055e 0100     		.2byte	0x1
+ 3339 0560 50       		.byte	0x50
+ 3340 0561 D0030000 		.4byte	.LVL89-.Ltext0
+ 3341 0565 DC030000 		.4byte	.LFE9-.Ltext0
+ 3342 0569 0400     		.2byte	0x4
+ 3343 056b F3       		.byte	0xf3
+ 3344 056c 01       		.uleb128 0x1
+ 3345 056d 50       		.byte	0x50
+ 3346 056e 9F       		.byte	0x9f
+ 3347 056f 00000000 		.4byte	0
+ 3348 0573 00000000 		.4byte	0
+ 3349              	.LLST27:
+ 3350 0577 DC030000 		.4byte	.LFB10-.Ltext0
+ 3351 057b E0030000 		.4byte	.LCFI17-.Ltext0
+ 3352 057f 0200     		.2byte	0x2
+ 3353 0581 7D       		.byte	0x7d
+ 3354 0582 00       		.sleb128 0
+ 3355 0583 E0030000 		.4byte	.LCFI17-.Ltext0
+ 3356 0587 3C040000 		.4byte	.LCFI18-.Ltext0
+ 3357 058b 0200     		.2byte	0x2
+ 3358 058d 7D       		.byte	0x7d
+ 3359 058e 10       		.sleb128 16
+ 3360 058f 3C040000 		.4byte	.LCFI18-.Ltext0
+ 3361 0593 44040000 		.4byte	.LFE10-.Ltext0
+ 3362 0597 0200     		.2byte	0x2
+ 3363 0599 7D       		.byte	0x7d
+ 3364 059a 00       		.sleb128 0
+ 3365 059b 00000000 		.4byte	0
+ 3366 059f 00000000 		.4byte	0
+ 3367              	.LLST28:
+ 3368 05a3 DC030000 		.4byte	.LVL90-.Ltext0
+ 3369 05a7 E8030000 		.4byte	.LVL91-.Ltext0
+ 3370 05ab 0100     		.2byte	0x1
+ 3371 05ad 50       		.byte	0x50
+ 3372 05ae E8030000 		.4byte	.LVL91-.Ltext0
+ 3373 05b2 20040000 		.4byte	.LVL98-.Ltext0
+ 3374 05b6 0100     		.2byte	0x1
+ 3375 05b8 54       		.byte	0x54
+ 3376 05b9 20040000 		.4byte	.LVL98-.Ltext0
+ 3377 05bd 2C040000 		.4byte	.LVL100-.Ltext0
+ 3378 05c1 0100     		.2byte	0x1
+ 3379 05c3 56       		.byte	0x56
+ 3380 05c4 2C040000 		.4byte	.LVL100-.Ltext0
+ 3381 05c8 3C040000 		.4byte	.LVL102-.Ltext0
+ 3382 05cc 0100     		.2byte	0x1
+ 3383 05ce 54       		.byte	0x54
+ 3384 05cf 00000000 		.4byte	0
+ 3385 05d3 00000000 		.4byte	0
+ 3386              	.LLST29:
+ 3387 05d7 DC030000 		.4byte	.LVL90-.Ltext0
+ 3388 05db E8030000 		.4byte	.LVL91-.Ltext0
+ 3389 05df 0100     		.2byte	0x1
+ 3390 05e1 50       		.byte	0x50
+ 3391 05e2 E8030000 		.4byte	.LVL91-.Ltext0
+ 3392 05e6 3C040000 		.4byte	.LVL102-.Ltext0
+ 3393 05ea 0100     		.2byte	0x1
+ 3394 05ec 55       		.byte	0x55
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 72
+
+
+ 3395 05ed 3C040000 		.4byte	.LVL102-.Ltext0
+ 3396 05f1 44040000 		.4byte	.LFE10-.Ltext0
+ 3397 05f5 0400     		.2byte	0x4
+ 3398 05f7 F3       		.byte	0xf3
+ 3399 05f8 01       		.uleb128 0x1
+ 3400 05f9 50       		.byte	0x50
+ 3401 05fa 9F       		.byte	0x9f
+ 3402 05fb 00000000 		.4byte	0
+ 3403 05ff 00000000 		.4byte	0
+ 3404              	.LLST30:
+ 3405 0603 F4030000 		.4byte	.LVL93-.Ltext0
+ 3406 0607 0C040000 		.4byte	.LVL94-.Ltext0
+ 3407 060b 0100     		.2byte	0x1
+ 3408 060d 50       		.byte	0x50
+ 3409 060e 18040000 		.4byte	.LVL97-.Ltext0
+ 3410 0612 23040000 		.4byte	.LVL99-1-.Ltext0
+ 3411 0616 0100     		.2byte	0x1
+ 3412 0618 50       		.byte	0x50
+ 3413 0619 2C040000 		.4byte	.LVL100-.Ltext0
+ 3414 061d 38040000 		.4byte	.LVL101-.Ltext0
+ 3415 0621 0100     		.2byte	0x1
+ 3416 0623 50       		.byte	0x50
+ 3417 0624 00000000 		.4byte	0
+ 3418 0628 00000000 		.4byte	0
+ 3419              	.LLST31:
+ 3420 062c 44040000 		.4byte	.LFB11-.Ltext0
+ 3421 0630 48040000 		.4byte	.LCFI19-.Ltext0
+ 3422 0634 0200     		.2byte	0x2
+ 3423 0636 7D       		.byte	0x7d
+ 3424 0637 00       		.sleb128 0
+ 3425 0638 48040000 		.4byte	.LCFI19-.Ltext0
+ 3426 063c 4C040000 		.4byte	.LCFI20-.Ltext0
+ 3427 0640 0200     		.2byte	0x2
+ 3428 0642 7D       		.byte	0x7d
+ 3429 0643 10       		.sleb128 16
+ 3430 0644 4C040000 		.4byte	.LCFI20-.Ltext0
+ 3431 0648 18050000 		.4byte	.LCFI21-.Ltext0
+ 3432 064c 0200     		.2byte	0x2
+ 3433 064e 7D       		.byte	0x7d
+ 3434 064f 30       		.sleb128 48
+ 3435 0650 18050000 		.4byte	.LCFI21-.Ltext0
+ 3436 0654 1C050000 		.4byte	.LCFI22-.Ltext0
+ 3437 0658 0200     		.2byte	0x2
+ 3438 065a 7D       		.byte	0x7d
+ 3439 065b 10       		.sleb128 16
+ 3440 065c 1C050000 		.4byte	.LCFI22-.Ltext0
+ 3441 0660 20050000 		.4byte	.LFE11-.Ltext0
+ 3442 0664 0200     		.2byte	0x2
+ 3443 0666 7D       		.byte	0x7d
+ 3444 0667 00       		.sleb128 0
+ 3445 0668 00000000 		.4byte	0
+ 3446 066c 00000000 		.4byte	0
+ 3447              	.LLST32:
+ 3448 0670 4C040000 		.4byte	.LVL104-.Ltext0
+ 3449 0674 5C040000 		.4byte	.LVL106-.Ltext0
+ 3450 0678 0100     		.2byte	0x1
+ 3451 067a 5D       		.byte	0x5d
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 73
+
+
+ 3452 067b 5C040000 		.4byte	.LVL106-.Ltext0
+ 3453 067f 70040000 		.4byte	.LVL107-.Ltext0
+ 3454 0683 0300     		.2byte	0x3
+ 3455 0685 91       		.byte	0x91
+ 3456 0686 49       		.sleb128 -55
+ 3457 0687 9F       		.byte	0x9f
+ 3458 0688 70040000 		.4byte	.LVL107-.Ltext0
+ 3459 068c 18050000 		.4byte	.LVL125-.Ltext0
+ 3460 0690 0100     		.2byte	0x1
+ 3461 0692 5D       		.byte	0x5d
+ 3462 0693 18050000 		.4byte	.LVL125-.Ltext0
+ 3463 0697 20050000 		.4byte	.LFE11-.Ltext0
+ 3464 069b 0300     		.2byte	0x3
+ 3465 069d 91       		.byte	0x91
+ 3466 069e 48       		.sleb128 -56
+ 3467 069f 9F       		.byte	0x9f
+ 3468 06a0 00000000 		.4byte	0
+ 3469 06a4 00000000 		.4byte	0
+ 3470              	.LLST33:
+ 3471 06a8 4C040000 		.4byte	.LVL104-.Ltext0
+ 3472 06ac 94040000 		.4byte	.LVL108-.Ltext0
+ 3473 06b0 0200     		.2byte	0x2
+ 3474 06b2 3A       		.byte	0x3a
+ 3475 06b3 9F       		.byte	0x9f
+ 3476 06b4 94040000 		.4byte	.LVL108-.Ltext0
+ 3477 06b8 AC040000 		.4byte	.LVL111-.Ltext0
+ 3478 06bc 0100     		.2byte	0x1
+ 3479 06be 56       		.byte	0x56
+ 3480 06bf AC040000 		.4byte	.LVL111-.Ltext0
+ 3481 06c3 BC040000 		.4byte	.LVL114-.Ltext0
+ 3482 06c7 0200     		.2byte	0x2
+ 3483 06c9 40       		.byte	0x40
+ 3484 06ca 9F       		.byte	0x9f
+ 3485 06cb BC040000 		.4byte	.LVL114-.Ltext0
+ 3486 06cf C4040000 		.4byte	.LVL115-.Ltext0
+ 3487 06d3 0100     		.2byte	0x1
+ 3488 06d5 56       		.byte	0x56
+ 3489 06d6 D0040000 		.4byte	.LVL116-.Ltext0
+ 3490 06da DC040000 		.4byte	.LVL118-.Ltext0
+ 3491 06de 0200     		.2byte	0x2
+ 3492 06e0 3A       		.byte	0x3a
+ 3493 06e1 9F       		.byte	0x9f
+ 3494 06e2 00000000 		.4byte	0
+ 3495 06e6 00000000 		.4byte	0
+ 3496              	.LLST34:
+ 3497 06ea 4C040000 		.4byte	.LVL104-.Ltext0
+ 3498 06ee 5C040000 		.4byte	.LVL106-.Ltext0
+ 3499 06f2 0200     		.2byte	0x2
+ 3500 06f4 30       		.byte	0x30
+ 3501 06f5 9F       		.byte	0x9f
+ 3502 06f6 5C040000 		.4byte	.LVL106-.Ltext0
+ 3503 06fa 70040000 		.4byte	.LVL107-.Ltext0
+ 3504 06fe 0200     		.2byte	0x2
+ 3505 0700 31       		.byte	0x31
+ 3506 0701 9F       		.byte	0x9f
+ 3507 0702 70040000 		.4byte	.LVL107-.Ltext0
+ 3508 0706 1C050000 		.4byte	.LVL126-.Ltext0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 74
+
+
+ 3509 070a 0100     		.2byte	0x1
+ 3510 070c 55       		.byte	0x55
+ 3511 070d 00000000 		.4byte	0
+ 3512 0711 00000000 		.4byte	0
+ 3513              	.LLST35:
+ 3514 0715 B4040000 		.4byte	.LVL112-.Ltext0
+ 3515 0719 B8040000 		.4byte	.LVL113-.Ltext0
+ 3516 071d 0300     		.2byte	0x3
+ 3517 071f 73       		.byte	0x73
+ 3518 0720 7F       		.sleb128 -1
+ 3519 0721 9F       		.byte	0x9f
+ 3520 0722 B8040000 		.4byte	.LVL113-.Ltext0
+ 3521 0726 BC040000 		.4byte	.LVL114-.Ltext0
+ 3522 072a 0100     		.2byte	0x1
+ 3523 072c 53       		.byte	0x53
+ 3524 072d 00000000 		.4byte	0
+ 3525 0731 00000000 		.4byte	0
+ 3526              	.LLST36:
+ 3527 0735 4C040000 		.4byte	.LVL104-.Ltext0
+ 3528 0739 D8040000 		.4byte	.LVL117-.Ltext0
+ 3529 073d 0200     		.2byte	0x2
+ 3530 073f 30       		.byte	0x30
+ 3531 0740 9F       		.byte	0x9f
+ 3532 0741 D8040000 		.4byte	.LVL117-.Ltext0
+ 3533 0745 E4040000 		.4byte	.LVL120-.Ltext0
+ 3534 0749 0100     		.2byte	0x1
+ 3535 074b 50       		.byte	0x50
+ 3536 074c FC040000 		.4byte	.LVL121-.Ltext0
+ 3537 0750 20050000 		.4byte	.LFE11-.Ltext0
+ 3538 0754 0100     		.2byte	0x1
+ 3539 0756 50       		.byte	0x50
+ 3540 0757 00000000 		.4byte	0
+ 3541 075b 00000000 		.4byte	0
+ 3542              	.LLST37:
+ 3543 075f DC040000 		.4byte	.LVL118-.Ltext0
+ 3544 0763 E0040000 		.4byte	.LVL119-.Ltext0
+ 3545 0767 0600     		.2byte	0x6
+ 3546 0769 71       		.byte	0x71
+ 3547 076a 00       		.sleb128 0
+ 3548 076b 7D       		.byte	0x7d
+ 3549 076c 00       		.sleb128 0
+ 3550 076d 1C       		.byte	0x1c
+ 3551 076e 9F       		.byte	0x9f
+ 3552 076f E0040000 		.4byte	.LVL119-.Ltext0
+ 3553 0773 00050000 		.4byte	.LVL122-.Ltext0
+ 3554 0777 0700     		.2byte	0x7
+ 3555 0779 7D       		.byte	0x7d
+ 3556 077a 00       		.sleb128 0
+ 3557 077b 20       		.byte	0x20
+ 3558 077c 71       		.byte	0x71
+ 3559 077d 00       		.sleb128 0
+ 3560 077e 22       		.byte	0x22
+ 3561 077f 9F       		.byte	0x9f
+ 3562 0780 00050000 		.4byte	.LVL122-.Ltext0
+ 3563 0784 0C050000 		.4byte	.LVL123-.Ltext0
+ 3564 0788 0600     		.2byte	0x6
+ 3565 078a 71       		.byte	0x71
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 75
+
+
+ 3566 078b 00       		.sleb128 0
+ 3567 078c 7D       		.byte	0x7d
+ 3568 078d 00       		.sleb128 0
+ 3569 078e 1C       		.byte	0x1c
+ 3570 078f 9F       		.byte	0x9f
+ 3571 0790 00000000 		.4byte	0
+ 3572 0794 00000000 		.4byte	0
+ 3573              	.LLST38:
+ 3574 0798 20050000 		.4byte	.LFB12-.Ltext0
+ 3575 079c 24050000 		.4byte	.LCFI23-.Ltext0
+ 3576 07a0 0200     		.2byte	0x2
+ 3577 07a2 7D       		.byte	0x7d
+ 3578 07a3 00       		.sleb128 0
+ 3579 07a4 24050000 		.4byte	.LCFI23-.Ltext0
+ 3580 07a8 28050000 		.4byte	.LCFI24-.Ltext0
+ 3581 07ac 0200     		.2byte	0x2
+ 3582 07ae 7D       		.byte	0x7d
+ 3583 07af 10       		.sleb128 16
+ 3584 07b0 28050000 		.4byte	.LCFI24-.Ltext0
+ 3585 07b4 DC050000 		.4byte	.LCFI25-.Ltext0
+ 3586 07b8 0200     		.2byte	0x2
+ 3587 07ba 7D       		.byte	0x7d
+ 3588 07bb 28       		.sleb128 40
+ 3589 07bc DC050000 		.4byte	.LCFI25-.Ltext0
+ 3590 07c0 E0050000 		.4byte	.LCFI26-.Ltext0
+ 3591 07c4 0200     		.2byte	0x2
+ 3592 07c6 7D       		.byte	0x7d
+ 3593 07c7 1C       		.sleb128 28
+ 3594 07c8 E0050000 		.4byte	.LCFI26-.Ltext0
+ 3595 07cc E4050000 		.4byte	.LCFI27-.Ltext0
+ 3596 07d0 0200     		.2byte	0x2
+ 3597 07d2 7D       		.byte	0x7d
+ 3598 07d3 10       		.sleb128 16
+ 3599 07d4 E4050000 		.4byte	.LCFI27-.Ltext0
+ 3600 07d8 E8050000 		.4byte	.LFE12-.Ltext0
+ 3601 07dc 0200     		.2byte	0x2
+ 3602 07de 7D       		.byte	0x7d
+ 3603 07df 00       		.sleb128 0
+ 3604 07e0 00000000 		.4byte	0
+ 3605 07e4 00000000 		.4byte	0
+ 3606              	.LLST39:
+ 3607 07e8 20050000 		.4byte	.LVL127-.Ltext0
+ 3608 07ec 34050000 		.4byte	.LVL128-.Ltext0
+ 3609 07f0 0200     		.2byte	0x2
+ 3610 07f2 91       		.byte	0x91
+ 3611 07f3 70       		.sleb128 -16
+ 3612 07f4 34050000 		.4byte	.LVL128-.Ltext0
+ 3613 07f8 38050000 		.4byte	.LVL129-.Ltext0
+ 3614 07fc 0100     		.2byte	0x1
+ 3615 07fe 54       		.byte	0x54
+ 3616 07ff 38050000 		.4byte	.LVL129-.Ltext0
+ 3617 0803 E0050000 		.4byte	.LVL140-.Ltext0
+ 3618 0807 0300     		.2byte	0x3
+ 3619 0809 74       		.byte	0x74
+ 3620 080a 7F       		.sleb128 -1
+ 3621 080b 9F       		.byte	0x9f
+ 3622 080c 00000000 		.4byte	0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 76
+
+
+ 3623 0810 00000000 		.4byte	0
+ 3624              	.LLST40:
+ 3625 0814 38050000 		.4byte	.LVL129-.Ltext0
+ 3626 0818 4C050000 		.4byte	.LVL130-.Ltext0
+ 3627 081c 0100     		.2byte	0x1
+ 3628 081e 53       		.byte	0x53
+ 3629 081f 4C050000 		.4byte	.LVL130-.Ltext0
+ 3630 0823 9B050000 		.4byte	.LVL132-1-.Ltext0
+ 3631 0827 0200     		.2byte	0x2
+ 3632 0829 74       		.byte	0x74
+ 3633 082a 7F       		.sleb128 -1
+ 3634 082b A0050000 		.4byte	.LVL133-.Ltext0
+ 3635 082f B3050000 		.4byte	.LVL135-1-.Ltext0
+ 3636 0833 0200     		.2byte	0x2
+ 3637 0835 74       		.byte	0x74
+ 3638 0836 7F       		.sleb128 -1
+ 3639 0837 BC050000 		.4byte	.LVL136-.Ltext0
+ 3640 083b CF050000 		.4byte	.LVL138-1-.Ltext0
+ 3641 083f 0200     		.2byte	0x2
+ 3642 0841 74       		.byte	0x74
+ 3643 0842 7F       		.sleb128 -1
+ 3644 0843 D8050000 		.4byte	.LVL139-.Ltext0
+ 3645 0847 E8050000 		.4byte	.LFE12-.Ltext0
+ 3646 084b 0100     		.2byte	0x1
+ 3647 084d 53       		.byte	0x53
+ 3648 084e 00000000 		.4byte	0
+ 3649 0852 00000000 		.4byte	0
+ 3650              	.LLST41:
+ 3651 0856 AC050000 		.4byte	.LVL134-.Ltext0
+ 3652 085a BC050000 		.4byte	.LVL136-.Ltext0
+ 3653 085e 0100     		.2byte	0x1
+ 3654 0860 55       		.byte	0x55
+ 3655 0861 00000000 		.4byte	0
+ 3656 0865 00000000 		.4byte	0
+ 3657              	.LLST42:
+ 3658 0869 98050000 		.4byte	.LVL131-.Ltext0
+ 3659 086d 9B050000 		.4byte	.LVL132-1-.Ltext0
+ 3660 0871 0100     		.2byte	0x1
+ 3661 0873 50       		.byte	0x50
+ 3662 0874 C8050000 		.4byte	.LVL137-.Ltext0
+ 3663 0878 CF050000 		.4byte	.LVL138-1-.Ltext0
+ 3664 087c 0100     		.2byte	0x1
+ 3665 087e 51       		.byte	0x51
+ 3666 087f 00000000 		.4byte	0
+ 3667 0883 00000000 		.4byte	0
+ 3668              		.section	.debug_aranges,"",%progbits
+ 3669 0000 1C000000 		.4byte	0x1c
+ 3670 0004 0200     		.2byte	0x2
+ 3671 0006 00000000 		.4byte	.Ldebug_info0
+ 3672 000a 04       		.byte	0x4
+ 3673 000b 00       		.byte	0
+ 3674 000c 0000     		.2byte	0
+ 3675 000e 0000     		.2byte	0
+ 3676 0010 00000000 		.4byte	.Ltext0
+ 3677 0014 E8050000 		.4byte	.Letext0-.Ltext0
+ 3678 0018 00000000 		.4byte	0
+ 3679 001c 00000000 		.4byte	0
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 77
+
+
+ 3680              		.section	.debug_line,"",%progbits
+ 3681              	.Ldebug_line0:
+ 3682 0000 FC010000 		.section	.debug_str,"MS",%progbits,1
+ 3682      0200AF00 
+ 3682      00000201 
+ 3682      FB0E0D00 
+ 3682      01010101 
+ 3683              	.LASF30:
+ 3684 0000 636F756E 		.ascii	"count\000"
+ 3684      7400
+ 3685              	.LASF23:
+ 3686 0006 636F6E73 		.ascii	"consolSendString\000"
+ 3686      6F6C5365 
+ 3686      6E645374 
+ 3686      72696E67 
+ 3686      00
+ 3687              	.LASF55:
+ 3688 0017 72657377 		.ascii	"reswitch\000"
+ 3688      69746368 
+ 3688      00
+ 3689              	.LASF33:
+ 3690 0020 636F6E73 		.ascii	"consolGetString\000"
+ 3690      6F6C4765 
+ 3690      74537472 
+ 3690      696E6700 
+ 3691              	.LASF22:
+ 3692 0030 636F6E73 		.ascii	"consolSendChar\000"
+ 3692      6F6C5365 
+ 3692      6E644368 
+ 3692      617200
+ 3693              	.LASF44:
+ 3694 003f 70466D74 		.ascii	"pFmt\000"
+ 3694      00
+ 3695              	.LASF13:
+ 3696 0044 76615F6C 		.ascii	"va_list\000"
+ 3696      69737400 
+ 3697              	.LASF39:
+ 3698 004c 77426173 		.ascii	"wBase\000"
+ 3698      6500
+ 3699              	.LASF9:
+ 3700 0052 6C6F6E67 		.ascii	"long long unsigned int\000"
+ 3700      206C6F6E 
+ 3700      6720756E 
+ 3700      7369676E 
+ 3700      65642069 
+ 3701              	.LASF56:
+ 3702 0069 636F6E73 		.ascii	"consolInit\000"
+ 3702      6F6C496E 
+ 3702      697400
+ 3703              	.LASF41:
+ 3704 0074 774C6173 		.ascii	"wLastIndex\000"
+ 3704      74496E64 
+ 3704      657800
+ 3705              	.LASF35:
+ 3706 007f 72784368 		.ascii	"rxChar\000"
+ 3706      617200
+ 3707              	.LASF38:
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 78
+
+
+ 3708 0086 61625374 		.ascii	"abStr\000"
+ 3708      7200
+ 3709              	.LASF36:
+ 3710 008c 636F6E73 		.ascii	"consolGetChar\000"
+ 3710      6F6C4765 
+ 3710      74436861 
+ 3710      7200
+ 3711              	.LASF1:
+ 3712 009a 6C6F6E67 		.ascii	"long long int\000"
+ 3712      206C6F6E 
+ 3712      6720696E 
+ 3712      7400
+ 3713              	.LASF3:
+ 3714 00a8 7369676E 		.ascii	"signed char\000"
+ 3714      65642063 
+ 3714      68617200 
+ 3715              	.LASF42:
+ 3716 00b4 77526573 		.ascii	"wResult\000"
+ 3716      756C7400 
+ 3717              	.LASF31:
+ 3718 00bc 73696D70 		.ascii	"simplePrintf\000"
+ 3718      6C655072 
+ 3718      696E7466 
+ 3718      00
+ 3719              	.LASF21:
+ 3720 00c9 63686172 		.ascii	"charToSend\000"
+ 3720      546F5365 
+ 3720      6E6400
+ 3721              	.LASF7:
+ 3722 00d4 6C6F6E67 		.ascii	"long int\000"
+ 3722      20696E74 
+ 3722      00
+ 3723              	.LASF53:
+ 3724 00dd 5F5F7661 		.ascii	"__va_list\000"
+ 3724      5F6C6973 
+ 3724      7400
+ 3725              	.LASF59:
+ 3726 00e7 6D656D63 		.ascii	"memcpy\000"
+ 3726      707900
+ 3727              	.LASF34:
+ 3728 00ee 70537472 		.ascii	"pString2\000"
+ 3728      696E6732 
+ 3728      00
+ 3729              	.LASF46:
+ 3730 00f7 63686172 		.ascii	"character\000"
+ 3730      61637465 
+ 3730      7200
+ 3731              	.LASF57:
+ 3732 0101 636F6E73 		.ascii	"consolSendCh\000"
+ 3732      6F6C5365 
+ 3732      6E644368 
+ 3732      00
+ 3733              	.LASF0:
+ 3734 010e 756E7369 		.ascii	"unsigned int\000"
+ 3734      676E6564 
+ 3734      20696E74 
+ 3734      00
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 79
+
+
+ 3735              	.LASF48:
+ 3736 011b 7374726C 		.ascii	"strlen\000"
+ 3736      656E00
+ 3737              	.LASF8:
+ 3738 0122 6C6F6E67 		.ascii	"long unsigned int\000"
+ 3738      20756E73 
+ 3738      69676E65 
+ 3738      6420696E 
+ 3738      7400
+ 3739              	.LASF40:
+ 3740 0134 774D696E 		.ascii	"wMinus\000"
+ 3740      757300
+ 3741              	.LASF43:
+ 3742 013b 636F6E73 		.ascii	"consolScanf\000"
+ 3742      6F6C5363 
+ 3742      616E6600 
+ 3743              	.LASF25:
+ 3744 0147 636F6E73 		.ascii	"consolSendNumber\000"
+ 3744      6F6C5365 
+ 3744      6E644E75 
+ 3744      6D626572 
+ 3744      00
+ 3745              	.LASF6:
+ 3746 0158 73686F72 		.ascii	"short unsigned int\000"
+ 3746      7420756E 
+ 3746      7369676E 
+ 3746      65642069 
+ 3746      6E7400
+ 3747              	.LASF15:
+ 3748 016b 6E756D62 		.ascii	"number\000"
+ 3748      657200
+ 3749              	.LASF14:
+ 3750 0172 6F757470 		.ascii	"outputFnk\000"
+ 3750      7574466E 
+ 3750      6B00
+ 3751              	.LASF51:
+ 3752 017c 636F6E73 		.ascii	"consol.c\000"
+ 3752      6F6C2E63 
+ 3752      00
+ 3753              	.LASF16:
+ 3754 0185 62617365 		.ascii	"base\000"
+ 3754      00
+ 3755              	.LASF17:
+ 3756 018a 68657843 		.ascii	"hexChars\000"
+ 3756      68617273 
+ 3756      00
+ 3757              	.LASF10:
+ 3758 0193 73697A65 		.ascii	"sizetype\000"
+ 3758      74797065 
+ 3758      00
+ 3759              	.LASF2:
+ 3760 019c 6C6F6E67 		.ascii	"long double\000"
+ 3760      20646F75 
+ 3760      626C6500 
+ 3761              	.LASF58:
+ 3762 01a8 636F6E73 		.ascii	"consolGetCh\000"
+ 3762      6F6C4765 
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 80
+
+
+ 3762      74436800 
+ 3763              	.LASF19:
+ 3764 01b4 73696D70 		.ascii	"simplePrint\000"
+ 3764      6C655072 
+ 3764      696E7400 
+ 3765              	.LASF12:
+ 3766 01c0 5F5F676E 		.ascii	"__gnuc_va_list\000"
+ 3766      75635F76 
+ 3766      615F6C69 
+ 3766      737400
+ 3767              	.LASF52:
+ 3768 01cf 433A5C45 		.ascii	"C:\\Embedded\\2138MiniDemo\\2138\\startup\000"
+ 3768      6D626564 
+ 3768      6465645C 
+ 3768      32313338 
+ 3768      4D696E69 
+ 3769              	.LASF20:
+ 3770 01f5 6C666C61 		.ascii	"lflag\000"
+ 3770      6700
+ 3771              	.LASF18:
+ 3772 01fb 7072696E 		.ascii	"printNum\000"
+ 3772      744E756D 
+ 3772      00
+ 3773              	.LASF45:
+ 3774 0204 70417267 		.ascii	"pArg\000"
+ 3774      00
+ 3775              	.LASF50:
+ 3776 0209 474E5520 		.ascii	"GNU C11 5.4.1 20160609 (release) [ARM/embedded-5-br"
+ 3776      43313120 
+ 3776      352E342E 
+ 3776      31203230 
+ 3776      31363036 
+ 3777 023c 616E6368 		.ascii	"anch revision 237715] -mcpu=arm7tdmi -mthumb-interw"
+ 3777      20726576 
+ 3777      6973696F 
+ 3777      6E203233 
+ 3777      37373135 
+ 3778 026f 6F726B20 		.ascii	"ork -gdwarf-2 -Os\000"
+ 3778      2D676477 
+ 3778      6172662D 
+ 3778      32202D4F 
+ 3778      7300
+ 3779              	.LASF24:
+ 3780 0281 70537472 		.ascii	"pString\000"
+ 3780      696E6700 
+ 3781              	.LASF49:
+ 3782 0289 61746F69 		.ascii	"atoi\000"
+ 3782      00
+ 3783              	.LASF4:
+ 3784 028e 756E7369 		.ascii	"unsigned char\000"
+ 3784      676E6564 
+ 3784      20636861 
+ 3784      7200
+ 3785              	.LASF47:
+ 3786 029c 70496E74 		.ascii	"pInt\000"
+ 3786      00
+ 3787              	.LASF32:
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 81
+
+
+ 3788 02a1 70436861 		.ascii	"pChar\000"
+ 3788      7200
+ 3789              	.LASF5:
+ 3790 02a7 73686F72 		.ascii	"short int\000"
+ 3790      7420696E 
+ 3790      7400
+ 3791              	.LASF37:
+ 3792 02b1 636F6E73 		.ascii	"consolGetIntNum\000"
+ 3792      6F6C4765 
+ 3792      74496E74 
+ 3792      4E756D00 
+ 3793              	.LASF11:
+ 3794 02c1 63686172 		.ascii	"char\000"
+ 3794      00
+ 3795              	.LASF26:
+ 3796 02c6 6E6F4469 		.ascii	"noDigits\000"
+ 3796      67697473 
+ 3796      00
+ 3797              	.LASF28:
+ 3798 02cf 70427566 		.ascii	"pBuf\000"
+ 3798      00
+ 3799              	.LASF54:
+ 3800 02d4 5F5F6170 		.ascii	"__ap\000"
+ 3800      00
+ 3801              	.LASF27:
+ 3802 02d9 7369676E 		.ascii	"sign\000"
+ 3802      00
+ 3803              	.LASF29:
+ 3804 02de 6E756D62 		.ascii	"numberAbs\000"
+ 3804      65724162 
+ 3804      7300
+ 3805              		.ident	"GCC: (GNU Tools for ARM Embedded Processors) 5.4.1 20160609 (release) [ARM/embedded-5-bran
+ARM GAS  C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s 			page 82
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 consol.c
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:18     .text:00000000 $a
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:21     .text:00000000 consolInit
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:61     .text:00000048 $d
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:66     .text:00000050 $a
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:69     .text:00000050 consolSendChar
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:92     .text:0000006c $d
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:96     .text:00000070 $a
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:99     .text:00000070 consolSendCh
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:143    .text:00000094 printNum.constprop.1
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:226    .text:00000108 $d
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:230    .text:0000010c $a
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:233    .text:0000010c consolSendString
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:275    .text:00000130 consolSendNumber
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:439    .text:0000022c $d
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:443    .text:00000230 $a
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:446    .text:00000230 simplePrintf
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:688    .text:00000394 consolGetCh
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:712    .text:000003b4 $d
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:716    .text:000003b8 $a
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:719    .text:000003b8 consolGetChar
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:745    .text:000003d8 $d
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:749    .text:000003dc $a
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:752    .text:000003dc consolGetString
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:829    .text:00000440 $d
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:833    .text:00000444 $a
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:836    .text:00000444 consolGetIntNum
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:981    .text:00000520 consolScanf
+C:\Users\embedded\AppData\Local\Temp\ccwmYU8M.s:1108   .rodata:00000000 hexChars.5043
+                     .debug_frame:00000010 $d
+
+UNDEFINED SYMBOLS
+__aeabi_uidivmod
+__aeabi_uidiv
+memcpy
+strlen
+atoi

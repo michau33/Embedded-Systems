@@ -1,0 +1,26 @@
+what,kind,bundleId,bundleVersion,description,time
+java.version,sysinfo,,,"1.6.0_35",1486039789350
+java.vm.info,sysinfo,,,"mixed mode, sharing",1486039789350
+java.vm.name,sysinfo,,,"Java HotSpot(TM) Client VM",1486039789350
+java.vm.specification.name,sysinfo,,,"Java Virtual Machine Specification",1486039789350
+java.vm.specification.vendor,sysinfo,,,"Sun Microsystems Inc.",1486039789350
+java.vm.specification.version,sysinfo,,,"1.0",1486039789350
+java.vm.vendor,sysinfo,,,"Sun Microsystems Inc.",1486039789350
+java.vm.version,sysinfo,,,"20.10-b01",1486039789350
+started,bundle,org.eclipse.debug.ui,3.5.2.v20091028_r352,"org.eclipse.debug.ui",1486039794869
+started,bundle,org.eclipse.ui.externaltools,3.2.0.v20090504,"org.eclipse.ui.externaltools",1486039794957
+started,bundle,org.eclipse.cdt.debug.core,6.0.0.200909110608,"org.eclipse.cdt.debug.core",1486039794968
+started,bundle,org.eclipse.cdt.debug.ui,6.0.0.200909110608,"org.eclipse.cdt.debug.ui",1486039794979
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486039827157
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486039865236
+activated,view,org.eclipse.ui.navigator.resources,3.4.1.M20090826-0800,"org.eclipse.ui.navigator.ProjectExplorer",1486039865286
+activated,editor,org.eclipse.cdt.ui,5.1.1.200909110608,"org.eclipse.cdt.ui.editor.CEditor",1486039869272
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486039872216
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486039873108
+activated,view,org.eclipse.ui.navigator.resources,3.4.1.M20090826-0800,"org.eclipse.ui.navigator.ProjectExplorer",1486039884294
+activated,editor,org.eclipse.cdt.ui,5.1.1.200909110608,"org.eclipse.cdt.ui.editor.CEditor",1486039889491
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486039907858
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486039914377
+closed,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486039914447
+stopped,bundle,org.eclipse.compare.win32,1.0.0.I20090430-0408,"org.eclipse.compare.win32",1486039914587
+stopped,bundle,com.zylin.embeddedcdt,4.11.1,"com.zylin.embeddedcdt",1486039914587

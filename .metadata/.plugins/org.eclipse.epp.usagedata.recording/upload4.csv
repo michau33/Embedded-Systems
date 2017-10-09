@@ -1,0 +1,26 @@
+what,kind,bundleId,bundleVersion,description,time
+java.vm.specification.vendor,sysinfo,,,"Sun Microsystems Inc.",1486038358149
+java.vm.specification.version,sysinfo,,,"1.0",1486038358149
+java.vm.vendor,sysinfo,,,"Sun Microsystems Inc.",1486038358149
+java.vm.version,sysinfo,,,"20.10-b01",1486038358149
+activated,view,org.eclipse.ui.navigator.resources,3.4.1.M20090826-0800,"org.eclipse.ui.navigator.ProjectExplorer",1486038367483
+activated,view,org.eclipse.ui.navigator.resources,3.4.1.M20090826-0800,"org.eclipse.ui.navigator.ProjectExplorer",1486038367493
+closed,view,org.eclipse.ui,3.5.2.M20100120-0800,"org.eclipse.ui.internal.introview",1486038367493
+started,bundle,org.eclipse.cdt.managedbuilder.core,6.0.0.200909110608,"org.eclipse.cdt.managedbuilder.core",1486038376926
+started,bundle,org.eclipse.cdt.managedbuilder.gnu.ui,5.0.100.200909110608,"org.eclipse.cdt.managedbuilder.gnu.ui",1486038376926
+started,bundle,org.eclipse.cdt.managedbuilder.ui,5.1.0.200909110608,"org.eclipse.cdt.managedbuilder.ui",1486038376926
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486038377006
+started,bundle,org.eclipse.cdt.make.core,6.0.0.200909110608,"org.eclipse.cdt.make.core",1486038390496
+started,bundle,org.eclipse.core.variables,3.2.200.v20090521,"org.eclipse.core.variables",1486038390506
+started,bundle,org.eclipse.debug.core,3.5.1.v20091103_r352,"org.eclipse.debug.core",1486038390606
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486038390786
+opened,view,org.eclipse.ui.console,3.4.0.v20090513,"org.eclipse.ui.console.ConsoleView",1486038391046
+started,bundle,org.eclipse.search,3.5.1.r351_v20090708-0800,"org.eclipse.search",1486038396765
+started,bundle,org.eclipse.compare,3.5.2.r35x_20100113-0800,"org.eclipse.compare",1486038396775
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486038402122
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486038440904
+executed,command,org.eclipse.ui,3.5.2.M20100120-0800,"org.eclipse.ui.file.properties",1486038440934
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486038441699
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486038464228
+deactivated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486038470516
+activated,workbench,org.eclipse.ui.workbench,3.5.2.M20100113-0800,"",1486038471627

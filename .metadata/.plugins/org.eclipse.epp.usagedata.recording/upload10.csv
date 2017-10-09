@@ -1,0 +1,15 @@
+what,kind,bundleId,bundleVersion,description,time
+stopped,bundle,org.eclipse.ui.editors,3.5.0.v20090527-2000,"org.eclipse.ui.editors",1486039628831
+stopped,bundle,org.eclipse.ui.navigator.resources,3.4.1.M20090826-0800,"org.eclipse.ui.navigator.resources",1486039628831
+stopped,bundle,org.eclipse.ui.workbench.texteditor,3.5.1.r352_v20100105,"org.eclipse.ui.workbench.texteditor",1486039628831
+stopped,bundle,org.eclipse.compare.core,3.5.0.I20090430-0408,"org.eclipse.compare.core",1486039628831
+stopped,bundle,org.eclipse.equinox.p2.ui.sdk,1.0.100.v20090520-1905,"org.eclipse.equinox.p2.ui.sdk",1486039628831
+stopped,bundle,org.eclipse.equinox.p2.ui.sdk.scheduler,1.0.0.v20090520-1905,"org.eclipse.equinox.p2.ui.sdk.scheduler",1486039628831
+stopped,bundle,org.eclipse.equinox.p2.ui,1.0.101.R35x_v20090819,"org.eclipse.equinox.p2.ui",1486039628841
+stopped,bundle,org.eclipse.equinox.security.ui,1.0.100.v20090520-1800,"org.eclipse.equinox.security.ui",1486039628841
+stopped,bundle,org.eclipse.cdt,5.1.0.200909110608,"org.eclipse.cdt",1486039628841
+stopped,bundle,org.eclipse.cdt.doc.user,5.1.0.200909110608,"org.eclipse.cdt.doc.user",1486039628841
+stopped,bundle,org.eclipse.ui.cheatsheets,3.3.200.v20090526,"org.eclipse.ui.cheatsheets",1486039628841
+stopped,bundle,org.eclipse.help.ui,3.4.1.v20090819_35x,"org.eclipse.help.ui",1486039628841
+stopped,bundle,org.eclipse.ui.views.properties.tabbed,3.5.0.I20090429-1800,"org.eclipse.ui.views.properties.tabbed",1486039628841
+stopped,bundle,org.eclipse.update.scheduler,3.2.200.v20081127,"org.eclipse.update.scheduler",1486039628841
