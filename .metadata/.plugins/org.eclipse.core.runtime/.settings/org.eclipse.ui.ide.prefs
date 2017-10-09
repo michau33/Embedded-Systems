@@ -1,6 +1,7 @@
-#Wed Aug 30 08:35:41 CEST 2017
+#Mon Oct 09 08:44:21 CEST 2017
 SAVE_ALL_BEFORE_BUILD=true
 eclipse.preferences.version=1
-platformState=1504008353470
 tipsAndTricks=true
+platformState=1317893503415
+EXIT_PROMPT_ON_CLOSE_LAST_WINDOW=false
 PROBLEMS_FILTERS_MIGRATE=true
