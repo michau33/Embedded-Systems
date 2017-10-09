@@ -121,11 +121,14 @@ int main(void)
     // uruchomienie GPIO na nodze P1.16 i P1.17.
     PINSEL2 &= ~(1 << 3);
     // Kierunek out na nodze P1.16
-    IODIR1 |= DIODA_PRAWA; //(1 << 16);
+    IODIR1 |= DIODA_LEWA; //(1 << 16);
     // Kierunek out na nodze P1.17
     IODIR1 |= DIODA_PRAWA; //(1 << 17);
     // Uruchomienie przerwań co 1/2 s.
     init_irq(100, 50);
+
+    VPBIDIV &= 0xFFFFFFFC;
+
 
     /**********************************************************************
      * Ta część jest nieskończoną pętlą realizującą działania programu
